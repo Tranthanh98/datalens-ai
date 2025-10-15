@@ -60,7 +60,7 @@ function extractKeyFindings(resultData: Record<string, unknown>[]): string[] {
  * Chat interface component for user interaction with AI
  * Displays message history and provides input for new messages
  * Fetches messages internally using useLiveQuery
- * 
+ *
  * OPTIMIZED VERSION:
  * - Tách thành các component con (ChatHeader, ChatInput, MessageList, ChatMessage)
  * - Sử dụng React.memo để tránh re-render không cần thiết
@@ -241,7 +241,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
               QueryExecutionApiService.createExecutor(connectionInfo);
 
             // Build conversation history context (last 3-4 exchanges)
-            const recentMessages = await MessageService.getByConversation(convId);
+            const recentMessages = await MessageService.getByConversation(
+              convId
+            );
             const conversationHistory = [];
 
             // Get last 4 complete Q&A pairs (user + AI)
@@ -266,7 +268,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
                   const userQuestion = recentMessages[i - 1].content;
 
                   // Extract key findings from query result
-                  const keyFindings = extractKeyFindings(queryResult.result.data);
+                  const keyFindings = extractKeyFindings(
+                    queryResult.result.data
+                  );
 
                   conversationHistory.unshift({
                     question: userQuestion,

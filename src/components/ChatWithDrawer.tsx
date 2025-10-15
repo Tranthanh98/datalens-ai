@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 import { useState } from "react";
-import ConversationDrawer from "./ConversationDrawer";
+import { useDatabaseStore } from "../store";
 import ChatInterface from "./ChatInterface";
-import { useDatabaseStore } from '../store';
+import ConversationDrawer from "./ConversationDrawer";
 
 interface ChatWithDrawerProps {
   // No props needed - components handle their own state

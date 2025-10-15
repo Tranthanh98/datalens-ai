@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { SchemaService } from "../db/services";
 
 export type DatabaseType = "mssql" | "postgresql" | "mysql";

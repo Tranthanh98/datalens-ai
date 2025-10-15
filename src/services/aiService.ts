@@ -219,12 +219,20 @@ export interface ChartData {
   description?: string;
 }
 
+export interface ConversationContext {
+  question: string;
+  answer: string;
+  sqlQuery?: string;
+  keyFindings?: string[]; // Important info extracted from results
+}
+
 export interface QueryPlan {
   id: string;
   question: string;
   intent: string;
   steps: QueryStep[];
   context: Array<{ step: QueryStep; result: any }>;
+  conversationHistory?: ConversationContext[]; // Previous Q&A for context
   finalAnswer?: string;
   finalSQL?: string;
   chartData?: ChartData;
@@ -241,10 +249,16 @@ export class AIService {
   static async generatePlan(
     question: string,
     schema: any,
-    databaseType: string = "postgresql"
+    databaseType: string = "postgresql",
+    conversationHistory: ConversationContext[] = []
   ): Promise<QueryPlan> {
     try {
-      const prompt = this.buildPlanPrompt(question, schema, databaseType);
+      const prompt = this.buildPlanPrompt(
+        question,
+        schema,
+        databaseType,
+        conversationHistory
+      );
       const result = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: prompt,
@@ -265,6 +279,7 @@ export class AIService {
         databaseType: planData.databaseType,
         steps: planData.steps,
         context: planData.context || [],
+        conversationHistory,
       };
 
       return plan;
@@ -308,7 +323,8 @@ export class AIService {
   static async runAIQuery(
     question: string,
     databaseInfo: DatabaseInfo,
-    executeSQL: (sql: string) => Promise<any>
+    executeSQL: (sql: string) => Promise<any>,
+    conversationHistory: ConversationContext[] = []
   ): Promise<{ answer: string; plan: QueryPlan }> {
     try {
       // Extract database ID and type from databaseInfo
@@ -327,8 +343,13 @@ export class AIService {
       // Use the actual database type from databaseInfo
       const databaseType = databaseInfo.type;
 
-      // Step 1: AI analyzes intent and generates plan
-      const plan = await this.generatePlan(question, schema, databaseType);
+      // Step 1: AI analyzes intent and generates plan with conversation context
+      const plan = await this.generatePlan(
+        question,
+        schema,
+        databaseType,
+        conversationHistory
+      );
 
       // Step 2: Execute each step in the plan
       for (const step of plan.steps) {
@@ -418,8 +439,32 @@ export class AIService {
   private static buildPlanPrompt(
     question: string,
     schema: any,
-    databaseType: string
+    databaseType: string,
+    conversationHistory: ConversationContext[] = []
   ): string {
+    // Build conversation history context
+    const historyContext =
+      conversationHistory.length > 0
+        ? `
+CONVERSATION HISTORY (Recent ${conversationHistory.length} exchanges):
+${conversationHistory
+  .map(
+    (ctx, idx) => `
+${idx + 1}. USER ASKED: "${ctx.question}"
+   AI ANSWERED: ${ctx.answer.substring(0, 200)}...
+   SQL USED: ${ctx.sqlQuery || "N/A"}
+   KEY FINDINGS: ${ctx.keyFindings?.join(", ") || "N/A"}
+`
+  )
+  .join("\n")}
+
+IMPORTANT: Use the context from previous questions to inform your current query.
+- If the user refers to "it", "them", "that user", etc., check the conversation history
+- Reuse filters, IDs, or conditions from previous queries when relevant
+- The current question may be a follow-up that assumes context from above
+`
+        : "";
+
     return `
 You are an expert SQL analyst. Analyze the user's question and create a step-by-step query plan.
 
@@ -427,7 +472,9 @@ DATABASE TYPE: ${databaseType}
 DATABASE SCHEMA:
 ${JSON.stringify(schema, null, 2)}
 
-USER QUESTION: "${question}"
+${historyContext}
+
+CURRENT USER QUESTION: "${question}"
 
 Create a JSON response with this structure:
 {
@@ -458,6 +505,7 @@ Guidelines:
 - For aggregations, ensure proper GROUP BY clauses
 - Handle JOINs carefully based on schema relationships
 - Ensure all SQL queries are SELECT statements only
+- **Pay attention to conversation history** - if the question references previous context (userId, statusId, etc.), incorporate those values
 
 Return only valid JSON.
     `.trim();
@@ -625,9 +673,15 @@ Answer (in Markdown format with chartdata block):
 export async function runAIQuery(
   question: string,
   databaseInfo: DatabaseInfo,
-  executeSQL: (sql: string) => Promise<any>
+  executeSQL: (sql: string) => Promise<any>,
+  conversationHistory: ConversationContext[] = []
 ): Promise<{ answer: string; plan: QueryPlan }> {
-  return AIService.runAIQuery(question, databaseInfo, executeSQL);
+  return AIService.runAIQuery(
+    question,
+    databaseInfo,
+    executeSQL,
+    conversationHistory
+  );
 }
 
 export default AIService;

@@ -19,6 +19,41 @@ interface ChatInterfaceProps {
 }
 
 /**
+ * Extract key findings from query result data for conversation context
+ */
+function extractKeyFindings(resultData: Record<string, unknown>[]): string[] {
+  if (!Array.isArray(resultData) || resultData.length === 0) {
+    return [];
+  }
+
+  const findings: string[] = [];
+  const firstRow = resultData[0];
+
+  // Extract important looking fields (IDs, status, names, etc.)
+  Object.entries(firstRow).forEach(([key, value]) => {
+    if (value !== null && value !== undefined) {
+      const lowerKey = key.toLowerCase();
+      if (
+        lowerKey.includes("id") ||
+        lowerKey.includes("status") ||
+        lowerKey.includes("user") ||
+        lowerKey.includes("name") ||
+        lowerKey.includes("code")
+      ) {
+        findings.push(`${key}: ${value}`);
+      }
+    }
+  });
+
+  // Add row count if significant
+  if (resultData.length > 0) {
+    findings.push(`Total rows: ${resultData.length}`);
+  }
+
+  return findings.slice(0, 5); // Limit to 5 most important findings
+}
+
+/**
  * Chat interface component for user interaction with AI
  * Displays message history and provides input for new messages
  * Fetches messages internally using useLiveQuery
@@ -188,11 +223,50 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
           const executeSQL =
             QueryExecutionApiService.createExecutor(connectionInfo);
 
-          // Execute AI query
+          // Build conversation history context (last 3-4 exchanges)
+          const recentMessages = await MessageService.getByConversation(convId);
+          const conversationHistory = [];
+
+          // Get last 4 complete Q&A pairs (user + AI)
+          for (
+            let i = recentMessages.length - 1;
+            i >= 0 && conversationHistory.length < 4;
+            i--
+          ) {
+            const msg = recentMessages[i];
+
+            // Look for AI messages with query results
+            if (msg.type === "ai" && msg.id) {
+              const queryResult = await QueryResultService.getByMessageId(
+                msg.id
+              );
+
+              if (
+                queryResult &&
+                i > 0 &&
+                recentMessages[i - 1].type === "user"
+              ) {
+                const userQuestion = recentMessages[i - 1].content;
+
+                // Extract key findings from query result
+                const keyFindings = extractKeyFindings(queryResult.result.data);
+
+                conversationHistory.unshift({
+                  question: userQuestion,
+                  answer: msg.content,
+                  sqlQuery: queryResult.sqlQuery,
+                  keyFindings: keyFindings,
+                });
+              }
+            }
+          }
+
+          // Execute AI query with conversation context
           const { answer: aiResponse, plan } = await runAIQuery(
             message,
             databaseInfo,
-            executeSQL
+            executeSQL,
+            conversationHistory
           );
 
           // Update the AI message with the real response

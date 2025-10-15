@@ -9,14 +9,6 @@ import {
 import { ConversationService } from "../db/services";
 import { useChatStore, useDatabaseStore } from "../store";
 
-interface Conversation {
-  id: string;
-  title: string;
-  lastMessage?: string;
-  timestamp: Date;
-  messageCount: number;
-}
-
 interface ConversationDrawerProps {
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;

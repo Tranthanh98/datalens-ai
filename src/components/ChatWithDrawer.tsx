@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-empty-object-type */
 import { useState } from "react";
 import { useDatabaseStore } from "../store";
-import ChatInterface from "./ChatInterface";
+import ChatInterface2 from "./ChatInterface2";
 import ConversationDrawer from "./ConversationDrawer";
 
 interface ChatWithDrawerProps {
@@ -43,7 +43,7 @@ const ChatWithDrawer: React.FC<ChatWithDrawerProps> = () => {
           isDrawerCollapsed ? "ml-12" : "ml-80"
         }`}
       >
-        <ChatInterface />
+        <ChatInterface2 />
       </div>
     </div>
   );

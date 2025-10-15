@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * AI Service using Google Gemini for intelligent SQL query generation
  * Implements multi-step reasoning to handle complex database queries
@@ -210,6 +211,14 @@ export interface QueryStep {
   dependencies?: string[];
 }
 
+export interface ChartData {
+  type: "bar" | "pie" | "line" | "none";
+  data: Array<{ name: string; value: number; [key: string]: any }>;
+  xAxisKey?: string;
+  yAxisKey?: string;
+  description?: string;
+}
+
 export interface QueryPlan {
   id: string;
   question: string;
@@ -217,6 +226,8 @@ export interface QueryPlan {
   steps: QueryStep[];
   context: Array<{ step: QueryStep; result: any }>;
   finalAnswer?: string;
+  finalSQL?: string;
+  chartData?: ChartData;
   databaseType: string;
 }
 
@@ -298,7 +309,7 @@ export class AIService {
     question: string,
     databaseInfo: DatabaseInfo,
     executeSQL: (sql: string) => Promise<any>
-  ): Promise<string> {
+  ): Promise<{ answer: string; plan: QueryPlan }> {
     try {
       // Extract database ID and type from databaseInfo
       const databaseId = databaseInfo.id;
@@ -350,7 +361,15 @@ export class AIService {
       const finalAnswer = await this.generateFinalAnswer(plan);
       plan.finalAnswer = finalAnswer;
 
-      return finalAnswer;
+      // Extract final SQL from the last executed step
+      const lastExecutedStep = plan.steps
+        .filter((step) => step.sql && step.result)
+        .pop();
+      if (lastExecutedStep?.sql) {
+        plan.finalSQL = lastExecutedStep.sql;
+      }
+
+      return { answer: finalAnswer, plan };
     } catch (error) {
       console.error("Error running AI query:", error);
       throw error;
@@ -508,6 +527,8 @@ Result: ${JSON.stringify(ctx.result, null, 2)}
   )
   .join("\n")}
 
+IMPORTANT: After your markdown answer, you MUST provide chart data suggestion in a special JSON block.
+
 Format your response as professional Markdown with:
 1. A clear heading for the main answer
 2. Use tables for data presentation when appropriate
@@ -537,19 +558,58 @@ Additional analysis or recommendations...
 ---
 *Note: Any limitations or assumptions*
 
-Generate the response following this structure but adapt it naturally to the specific data and question.
+CHART DATA SECTION (REQUIRED):
+After your markdown answer, add this JSON block for chart visualization:
 
-Answer (in Markdown format):
+\`\`\`chartdata
+{
+  "type": "bar|pie|line|none",
+  "data": [
+    {"name": "Category1", "value": 100},
+    {"name": "Category2", "value": 200}
+  ],
+  "xAxisKey": "name",
+  "yAxisKey": "value",
+  "description": "Brief description of what the chart shows"
+}
+\`\`\`
+
+Guidelines for chart data:
+- Use "bar" for comparisons, time series with multiple categories
+- Use "pie" for percentage/proportion distributions (max 6-8 slices)
+- Use "line" for trends over time
+- Use "none" if data is not suitable for visualization
+- Extract data from the query results to populate the chart
+- Keep data points between 3-20 for readability
+- Use meaningful names for categories
+
+Generate the response following this structure.
+
+Answer (in Markdown format with chartdata block):
       `.trim();
 
       const result = await model.generateContent({
         model: "gemini-2.5-flash",
         contents: prompt,
       });
-      return (
+
+      const fullResponse =
         result.text ||
-        "# Unable to Generate Answer\n\nI couldn't generate a comprehensive answer based on the query results. Please try rephrasing your question or check your database connection."
-      );
+        "# Unable to Generate Answer\n\nI couldn't generate a comprehensive answer based on the query results. Please try rephrasing your question or check your database connection.";
+
+      // Extract chart data from response
+      const chartDataMatch = fullResponse.match(/```chartdata\n([\s\S]*?)```/);
+      if (chartDataMatch) {
+        try {
+          const chartData = JSON.parse(chartDataMatch[1]);
+          plan.chartData = chartData;
+        } catch (e) {
+          console.warn("Failed to parse chart data:", e);
+        }
+      }
+
+      // Return response without the chartdata block
+      return fullResponse.replace(/```chartdata\n[\s\S]*?```/, "").trim();
     } catch (error) {
       console.error("Error generating final answer:", error);
       return "# Error\n\nUnable to generate a comprehensive answer based on the query results.";
@@ -560,12 +620,13 @@ Answer (in Markdown format):
 /**
  * Main function to run AI-powered query
  * This is the primary interface for the AI service
+ * Returns both the answer text and the full plan with metadata
  */
 export async function runAIQuery(
   question: string,
   databaseInfo: DatabaseInfo,
   executeSQL: (sql: string) => Promise<any>
-): Promise<string> {
+): Promise<{ answer: string; plan: QueryPlan }> {
   return AIService.runAIQuery(question, databaseInfo, executeSQL);
 }
 

@@ -1,7 +1,7 @@
-import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
-import { createDatabaseSlice, type DatabaseSlice } from './databaseSlice';
-import { createChatSlice, type ChatSlice } from './chatSlice';
+import { create } from "zustand";
+import { devtools } from "zustand/middleware";
+import { createChatSlice, type ChatSlice } from "./chatSlice";
+import { createDatabaseSlice, type DatabaseSlice } from "./databaseSlice";
 
 // Combined store interface
 export interface AppStore extends DatabaseSlice, ChatSlice {}
@@ -14,7 +14,7 @@ export const useAppStore = create<AppStore>()(
       ...createChatSlice(...a),
     }),
     {
-      name: 'datalens-store',
+      name: "datalens-store",
     }
   )
 );
@@ -45,11 +45,21 @@ export const useDatabaseStore = () => {
 };
 
 export const useChatStore = () => {
-  const selectedConversationId = useAppStore((state) => state.selectedConversationId);
-  const setSelectedConversationId = useAppStore((state) => state.setSelectedConversationId);
+  const selectedConversationId = useAppStore(
+    (state) => state.selectedConversationId
+  );
+  const setSelectedConversationId = useAppStore(
+    (state) => state.setSelectedConversationId
+  );
+  const selectedMessageId = useAppStore((state) => state.selectedMessageId);
+  const setSelectedMessageId = useAppStore(
+    (state) => state.setSelectedMessageId
+  );
 
   return {
     selectedConversationId,
     setSelectedConversationId,
+    selectedMessageId,
+    setSelectedMessageId,
   };
 };

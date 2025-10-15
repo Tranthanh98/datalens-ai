@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * TypeScript interfaces for IndexedDB entities
  * Defines the structure for all database tables in DataLens AI
@@ -7,7 +8,7 @@
 export interface DatabaseInfo {
   id?: number;
   name: string;
-  type: 'postgresql' | 'mysql' | 'mssql';
+  type: "postgresql" | "mysql" | "mssql";
   connectionString?: string;
   host?: string;
   port?: number;
@@ -36,12 +37,7 @@ export interface Message {
   id?: number;
   conversationId: number; // Foreign key to Conversation
   content: string;
-  type: 'user' | 'ai';
-  metadata?: {
-    sqlQuery?: string;
-    executionTime?: number;
-    resultCount?: number;
-  };
+  type: "user" | "ai";
   createdAt: Date;
 }
 
@@ -57,7 +53,14 @@ export interface QueryResult {
     rowCount: number;
     executionTime: number;
   };
-  status: 'success' | 'error';
+  chartData?: {
+    type: "bar" | "pie" | "line" | "none";
+    data: Array<{ name: string; value: number; [key: string]: any }>;
+    xAxisKey?: string;
+    yAxisKey?: string;
+    description?: string;
+  };
+  status: "success" | "error";
   errorMessage?: string;
   createdAt: Date;
 }
@@ -74,8 +77,8 @@ export interface SchemaInfo {
 // User preferences and settings
 export interface UserSettings {
   id?: number;
-  theme: 'light' | 'dark' | 'system';
-  language: 'en' | 'vi';
+  theme: "light" | "dark" | "system";
+  language: "en" | "vi";
   autoSaveConversations: boolean;
   maxConversationHistory: number;
   defaultDatabase?: number; // Foreign key to DatabaseInfo

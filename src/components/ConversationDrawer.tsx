@@ -155,8 +155,8 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
       <div
         className="absolute top-0 left-0 w-12 bg-gray-100 border-r border-gray-200 flex flex-col items-center py-4 h-full flex-shrink-0"
         onClick={onToggleCollapse}
-        onMouseEnter={onToggleCollapse}
-        onMouseLeave={onToggleCollapse}
+        // onMouseEnter={onToggleCollapse}
+        // onMouseLeave={onToggleCollapse}
       >
         {/* Toggle Button */}
         <button

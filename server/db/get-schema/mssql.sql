@@ -49,15 +49,21 @@ SELECT
         FROM INFORMATION_SCHEMA.TABLES t
         WHERE t.TABLE_SCHEMA = 'dbo'
             AND t.TABLE_TYPE = 'BASE TABLE'
-            AND t.TABLE_NAME NOT LIKE '%log%'
+            AND (
+		        t.TABLE_NAME NOT LIKE 'Log_%'
+		        OR t.TABLE_NAME LIKE 'Login%'
+		      )
             AND t.TABLE_NAME NOT LIKE '%audit%'
             AND t.TABLE_NAME NOT LIKE '%vw%'
             AND t.TABLE_NAME NOT LIKE '%migration%'
             AND t.TABLE_NAME not like '%WebMenu%'
+            AND t.TABLE_NAME not like 'Report%'
+            AND t.TABLE_NAME not like 'System%'
+            AND t.TABLE_NAME not like 'Template%'
             AND (t.TABLE_NAME like '%Retailer%'
               OR t.TABLE_NAME like '%Matter%'
               OR t.TABLE_NAME like '%Client%'
-              OR t.TABLE_NAME like '%Login%'
+              OR t.TABLE_NAME like 'Login%'
               OR t.TABLE_NAME like '%Order%'
               OR t.TABLE_NAME like '%Service%'
               OR t.TABLE_NAME like '%Role%'

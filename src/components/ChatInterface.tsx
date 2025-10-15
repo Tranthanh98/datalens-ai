@@ -1,10 +1,14 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { Check, Edit3, Plus, Send } from "lucide-react";
-import { useState } from "react";
+import { BarChart3, Check, Edit3, Plus, Send } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { legacyToDatabase } from "../db/adapters";
-import { ConversationService, MessageService } from "../db/services";
+import {
+  ConversationService,
+  MessageService,
+  QueryResultService,
+} from "../db/services";
 import type { DatabaseInfo } from "../db/types";
 import { runAIQuery } from "../services/aiService";
 import { QueryExecutionApiService } from "../services/queryExecutionApiService";
@@ -24,12 +28,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Get selected conversation from store
-  const { selectedConversationId } = useChatStore();
+  const { selectedConversationId, setSelectedMessageId } = useChatStore();
 
   // Get selected database from store
   const { selectedDatabase } = useDatabaseStore();
+
+  // Auto-resize textarea based on content
+  useEffect(() => {
+    if (textareaRef.current) {
+      // Reset height to auto to get the correct scrollHeight
+      textareaRef.current.style.height = "auto";
+      // Set height based on scrollHeight, with min and max constraints
+      const newHeight = Math.min(
+        Math.max(textareaRef.current.scrollHeight, 40),
+        120
+      );
+      textareaRef.current.style.height = `${newHeight}px`;
+    }
+  }, [inputValue]);
 
   // Fetch messages for selected conversation using useLiveQuery
   const messages =
@@ -39,12 +58,25 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
       const msgList = await MessageService.getByConversation(
         parseInt(selectedConversationId)
       );
-      return msgList.map((msg) => ({
-        id: msg.id!.toString(),
-        content: msg.content,
-        type: msg.type as "user" | "ai",
-        timestamp: msg.createdAt,
-      }));
+
+      // Check which messages have query results
+      const messagesWithResults = await Promise.all(
+        msgList.map(async (msg) => {
+          const queryResult = msg.id
+            ? await QueryResultService.getByMessageId(msg.id)
+            : null;
+
+          return {
+            id: msg.id!.toString(),
+            content: msg.content,
+            type: msg.type as "user" | "ai",
+            timestamp: msg.createdAt,
+            hasQueryResult: !!queryResult,
+          };
+        })
+      );
+
+      return messagesWithResults;
     }, [selectedConversationId]) || [];
 
   // Fetch conversation title
@@ -157,7 +189,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
             QueryExecutionApiService.createExecutor(connectionInfo);
 
           // Execute AI query
-          const aiResponse = await runAIQuery(
+          const { answer: aiResponse, plan } = await runAIQuery(
             message,
             databaseInfo,
             executeSQL
@@ -167,6 +199,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
           await MessageService.update(aiMessageId, {
             content: aiResponse,
           });
+
+          // Save query result to QueryResult table
+          if (plan.finalSQL) {
+            const lastContext = plan.context[plan.context.length - 1];
+            await QueryResultService.save({
+              conversationId: convId,
+              messageId: aiMessageId,
+              sqlQuery: plan.finalSQL,
+              result: {
+                data: lastContext?.result || [],
+                columns:
+                  lastContext?.result && lastContext.result.length > 0
+                    ? Object.keys(lastContext.result[0])
+                    : [],
+                rowCount: lastContext?.result?.length || 0,
+                executionTime: 0, // TODO: Track execution time
+              },
+              chartData: plan.chartData,
+              status: "success",
+            });
+          }
         } catch (aiError) {
           console.error("AI Query failed:", aiError);
 
@@ -274,97 +327,108 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
                 }`}
               >
                 {message.type === "ai" ? (
-                  <div className="text-sm markdown-content break-words">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        h1: ({ children }) => (
-                          <h1 className="text-lg font-bold mb-2 text-gray-900">
-                            {children}
-                          </h1>
-                        ),
-                        h2: ({ children }) => (
-                          <h2 className="text-base font-bold mb-2 text-gray-900">
-                            {children}
-                          </h2>
-                        ),
-                        h3: ({ children }) => (
-                          <h3 className="text-sm font-bold mb-1 text-gray-900">
-                            {children}
-                          </h3>
-                        ),
-                        p: ({ children }) => (
-                          <p className="mb-2 text-gray-800 leading-relaxed">
-                            {children}
-                          </p>
-                        ),
-                        ul: ({ children }) => (
-                          <ul className="list-disc list-inside mb-2 text-gray-800">
-                            {children}
-                          </ul>
-                        ),
-                        ol: ({ children }) => (
-                          <ol className="list-decimal list-inside mb-2 text-gray-800">
-                            {children}
-                          </ol>
-                        ),
-                        li: ({ children }) => (
-                          <li className="mb-1 text-gray-800">{children}</li>
-                        ),
-                        strong: ({ children }) => (
-                          <strong className="font-bold text-gray-900">
-                            {children}
-                          </strong>
-                        ),
-                        em: ({ children }) => (
-                          <em className="italic text-gray-800">{children}</em>
-                        ),
-                        code: ({ children }) => (
-                          <code className="bg-gray-200 text-gray-800 px-1 py-0.5 rounded text-xs font-mono break-words">
-                            {children}
-                          </code>
-                        ),
-                        pre: ({ children }) => (
-                          <pre className="bg-gray-200 p-2 rounded mb-2 overflow-x-auto text-xs max-w-full whitespace-pre-wrap break-words">
-                            {children}
-                          </pre>
-                        ),
-                        table: ({ children }) => (
-                          <div className="overflow-x-auto max-w-full">
-                            <table className="min-w-full border-collapse border border-gray-300 mb-2 text-xs">
+                  <div>
+                    <div className="text-sm markdown-content break-words">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          h1: ({ children }) => (
+                            <h1 className="text-lg font-bold mb-2 text-gray-900">
                               {children}
-                            </table>
-                          </div>
-                        ),
-                        thead: ({ children }) => (
-                          <thead className="bg-gray-200">{children}</thead>
-                        ),
-                        tbody: ({ children }) => <tbody>{children}</tbody>,
-                        tr: ({ children }) => (
-                          <tr className="border-b border-gray-300">
-                            {children}
-                          </tr>
-                        ),
-                        th: ({ children }) => (
-                          <th className="border border-gray-300 px-2 py-1 text-left font-bold">
-                            {children}
-                          </th>
-                        ),
-                        td: ({ children }) => (
-                          <td className="border border-gray-300 px-2 py-1">
-                            {children}
-                          </td>
-                        ),
-                        blockquote: ({ children }) => (
-                          <blockquote className="border-l-4 border-gray-400 pl-3 italic text-gray-700 mb-2">
-                            {children}
-                          </blockquote>
-                        ),
-                        hr: () => <hr className="my-3 border-gray-300" />,
-                      }}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
+                            </h1>
+                          ),
+                          h2: ({ children }) => (
+                            <h2 className="text-base font-bold mb-2 text-gray-900">
+                              {children}
+                            </h2>
+                          ),
+                          h3: ({ children }) => (
+                            <h3 className="text-sm font-bold mb-1 text-gray-900">
+                              {children}
+                            </h3>
+                          ),
+                          p: ({ children }) => (
+                            <p className="mb-2 text-gray-800 leading-relaxed">
+                              {children}
+                            </p>
+                          ),
+                          ul: ({ children }) => (
+                            <ul className="list-disc list-inside mb-2 text-gray-800">
+                              {children}
+                            </ul>
+                          ),
+                          ol: ({ children }) => (
+                            <ol className="list-decimal list-inside mb-2 text-gray-800">
+                              {children}
+                            </ol>
+                          ),
+                          li: ({ children }) => (
+                            <li className="mb-1 text-gray-800">{children}</li>
+                          ),
+                          strong: ({ children }) => (
+                            <strong className="font-bold text-gray-900">
+                              {children}
+                            </strong>
+                          ),
+                          em: ({ children }) => (
+                            <em className="italic text-gray-800">{children}</em>
+                          ),
+                          code: ({ children }) => (
+                            <code className="bg-gray-200 text-gray-800 px-1 py-0.5 rounded text-xs font-mono break-words">
+                              {children}
+                            </code>
+                          ),
+                          pre: ({ children }) => (
+                            <pre className="bg-gray-200 p-2 rounded mb-2 overflow-x-auto text-xs max-w-full whitespace-pre-wrap break-words">
+                              {children}
+                            </pre>
+                          ),
+                          table: ({ children }) => (
+                            <div className="overflow-x-auto max-w-full">
+                              <table className="min-w-full border-collapse border border-gray-300 mb-2 text-xs">
+                                {children}
+                              </table>
+                            </div>
+                          ),
+                          thead: ({ children }) => (
+                            <thead className="bg-gray-200">{children}</thead>
+                          ),
+                          tbody: ({ children }) => <tbody>{children}</tbody>,
+                          tr: ({ children }) => (
+                            <tr className="border-b border-gray-300">
+                              {children}
+                            </tr>
+                          ),
+                          th: ({ children }) => (
+                            <th className="border border-gray-300 px-2 py-1 text-left font-bold">
+                              {children}
+                            </th>
+                          ),
+                          td: ({ children }) => (
+                            <td className="border border-gray-300 px-2 py-1">
+                              {children}
+                            </td>
+                          ),
+                          blockquote: ({ children }) => (
+                            <blockquote className="border-l-4 border-gray-400 pl-3 italic text-gray-700 mb-2">
+                              {children}
+                            </blockquote>
+                          ),
+                          hr: () => <hr className="my-3 border-gray-300" />,
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
+                    {message.hasQueryResult && (
+                      <button
+                        onClick={() => setSelectedMessageId(message.id)}
+                        className="mt-2 flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <BarChart3 className="w-3 h-3" />
+                        View Result
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <p className="text-sm">{message.content}</p>
@@ -399,19 +463,31 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
 
       {/* Input Area */}
       <div className="p-4 border-t border-gray-200">
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
-            type="text"
+        <form onSubmit={handleSubmit} className="flex items-end gap-2">
+          <textarea
+            ref={textareaRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Ask about your data..."
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            onKeyDown={(e) => {
+              // Submit on Enter (without Shift)
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (inputValue.trim() && !isLoading) {
+                  handleSendMessage(inputValue.trim());
+                  setInputValue("");
+                }
+              }
+            }}
+            placeholder="Ask about your data... (Shift+Enter for new line)"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none overflow-y-auto"
             disabled={isLoading}
+            rows={1}
+            style={{ minHeight: "40px", maxHeight: "120px" }}
           />
           <button
             type="submit"
             disabled={!inputValue.trim() || isLoading}
-            className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
           >
             <Send className="w-5 h-5" />
           </button>

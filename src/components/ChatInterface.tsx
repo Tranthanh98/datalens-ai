@@ -274,7 +274,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
                 }`}
               >
                 {message.type === "ai" ? (
-                  <div className="text-sm markdown-content">
+                  <div className="text-sm markdown-content break-words">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
@@ -320,19 +320,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
                           <em className="italic text-gray-800">{children}</em>
                         ),
                         code: ({ children }) => (
-                          <code className="bg-gray-200 text-gray-800 px-1 py-0.5 rounded text-xs font-mono">
+                          <code className="bg-gray-200 text-gray-800 px-1 py-0.5 rounded text-xs font-mono break-words">
                             {children}
                           </code>
                         ),
                         pre: ({ children }) => (
-                          <pre className="bg-gray-200 p-2 rounded mb-2 overflow-x-auto text-xs">
+                          <pre className="bg-gray-200 p-2 rounded mb-2 overflow-x-auto text-xs max-w-full whitespace-pre-wrap break-words">
                             {children}
                           </pre>
                         ),
                         table: ({ children }) => (
-                          <table className="w-full border-collapse border border-gray-300 mb-2 text-xs">
-                            {children}
-                          </table>
+                          <div className="overflow-x-auto max-w-full">
+                            <table className="min-w-full border-collapse border border-gray-300 mb-2 text-xs">
+                              {children}
+                            </table>
+                          </div>
                         ),
                         thead: ({ children }) => (
                           <thead className="bg-gray-200">{children}</thead>

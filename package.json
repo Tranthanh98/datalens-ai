@@ -8,8 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "server": "tsx server.ts",
-    "server:dev": "tsx watch server.ts"
+    "server": "tsx server/src/server.ts",
+    "server:dev": "tsx watch server/src/server.ts"
   },
   "dependencies": {
     "@google/genai": "^1.24.0",

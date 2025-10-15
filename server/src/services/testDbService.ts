@@ -18,6 +18,7 @@ export async function testPostgreSQLConnection(
       user: config.username,
       password: config.password,
       connectionTimeoutMillis: 5000,
+      ssl: config.ssl || false,
     });
 
     client = await pool.connect();

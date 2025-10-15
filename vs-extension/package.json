@@ -1,0 +1,115 @@
+{
+  "name": "datalens-ai-extension",
+  "displayName": "DataLens AI - Database Chat Assistant",
+  "description": "Chat with your database using AI - supports PostgreSQL and MSSQL",
+  "version": "0.0.1",
+  "publisher": "datalens",
+  "icon": "resources/icon.png",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Data Science",
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "datalens.openChat",
+        "title": "DataLens: Open Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "datalens.connectDatabase",
+        "title": "DataLens: Connect Database",
+        "icon": "$(database)"
+      },
+      {
+        "command": "datalens.setApiKey",
+        "title": "DataLens: Set Gemini API Key",
+        "icon": "$(key)"
+      },
+      {
+        "command": "datalens.listDatabases",
+        "title": "DataLens: Manage Databases",
+        "icon": "$(list-flat)"
+      },
+      {
+        "command": "datalens.selectDatabase",
+        "title": "DataLens: Select Database",
+        "icon": "$(check)"
+      },
+      {
+        "command": "datalens.deleteDatabase",
+        "title": "DataLens: Delete Database",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "datalens.showCurrentDatabase",
+        "title": "DataLens: Show Current Database",
+        "icon": "$(info)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "datalens-sidebar",
+          "title": "DataLens AI",
+          "icon": "$(database)"
+        }
+      ]
+    },
+    "views": {
+      "datalens-sidebar": [
+        {
+          "type": "webview",
+          "id": "datalens.chatView",
+          "name": "Database Chat",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "DataLens AI",
+      "properties": {
+        "datalens.geminiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Gemini API Key for AI-powered queries",
+          "scope": "application"
+        },
+        "datalens.databases": {
+          "type": "array",
+          "default": [],
+          "description": "Saved database connections (encrypted)",
+          "scope": "application"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/mssql": "^9.1.8",
+    "@types/node": "^20.x",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.x",
+    "@typescript-eslint/parser": "^6.x",
+    "@vscode/vsce": "^2.22.0",
+    "eslint": "^8.x",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "@google/genai": "^1.24.0",
+    "mssql": "^10.0.2",
+    "pg": "^8.11.3"
+  }
+}

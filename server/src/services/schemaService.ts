@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import sql from "mssql";
 import mysql from "mysql2/promise";
 import { Pool } from "pg";
@@ -35,9 +36,11 @@ export class SchemaService {
 
       client = await pool.connect();
       const schemaQuery = this.queryLoader.getQuery("postgresql");
+      console.log("Executing PostgreSQL schema query:", schemaQuery);
       const result = await client.query(schemaQuery);
+      console.log("PostgreSQL schema query result:", result.rows);
 
-      return result.rows[0]?.schema_json || [];
+      return result.rows;
     } catch (error) {
       console.error("PostgreSQL schema query error:", error);
       throw new Error(`Failed to execute PostgreSQL schema query: ${error}`);
@@ -101,6 +104,7 @@ export class SchemaService {
     try {
       await pool.connect();
       const schemaQuery = this.queryLoader.getQuery("mssql");
+      schemaQuery.replace("{{database}}", connectionInfo.database);
       const result = await pool.request().query(schemaQuery);
 
       await pool.close();

@@ -1,5 +1,6 @@
 SELECT
     t.TABLE_NAME as table_name,
+    t.TABLE_SCHEMA as table_schema,
     (
         SELECT
             c.COLUMN_NAME as column_name,
@@ -48,7 +49,7 @@ SELECT
 FROM INFORMATION_SCHEMA.TABLES t
 WHERE t.TABLE_SCHEMA = 'dbo'
     AND t.TABLE_TYPE = 'BASE TABLE'
-    AND t.TABLE_CATALOG = {{databaseName}}
+    AND t.TABLE_CATALOG = '{{database}}'
     AND t.TABLE_NAME NOT LIKE '%log%'
     AND t.TABLE_NAME NOT LIKE '%audit%'
     AND t.TABLE_NAME NOT LIKE '%vw%'

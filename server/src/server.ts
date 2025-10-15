@@ -12,12 +12,12 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+import { QueryExecutionService } from "./services/queryExecutionService";
 import {
   testMySQLConnection,
   testPostgreSQLConnection,
   testSQLServerConnection,
 } from "./services/testDbService";
-import { QueryExecutionService } from "./services/queryExecutionService";
 
 // Interface for database connection
 export interface DatabaseConnection {
@@ -28,6 +28,7 @@ export interface DatabaseConnection {
   username: string;
   password: string;
   connectionString?: string;
+  ssl?: boolean;
 }
 
 /**
@@ -163,7 +164,8 @@ app.post("/api/execute-sql", async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        error: "Missing required connection parameters (type, host, database, username, password)",
+        error:
+          "Missing required connection parameters (type, host, database, username, password)",
       });
     }
 
@@ -172,13 +174,15 @@ app.post("/api/execute-sql", async (req, res) => {
     if (!supportedTypes.includes(connectionInfo.type)) {
       return res.status(400).json({
         success: false,
-        error: `Unsupported database type: ${connectionInfo.type}. Supported types: ${supportedTypes.join(", ")}`,
+        error: `Unsupported database type: ${
+          connectionInfo.type
+        }. Supported types: ${supportedTypes.join(", ")}`,
       });
     }
 
     // Additional security check - only allow SELECT queries
     const trimmedQuery = query.trim().toLowerCase();
-    if (!trimmedQuery.startsWith('select')) {
+    if (!trimmedQuery.startsWith("select")) {
       return res.status(400).json({
         success: false,
         error: "Only SELECT queries are allowed for security reasons",

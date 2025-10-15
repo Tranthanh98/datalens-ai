@@ -13,6 +13,9 @@ import type { DatabaseInfo } from "../db/types";
 import { runAIQuery } from "../services/aiService";
 import { QueryExecutionApiService } from "../services/queryExecutionApiService";
 import { useChatStore, useDatabaseStore } from "../store";
+import type { QueryPlanEvent, QueryPlanStep } from "../utils/queryPlanEvents";
+import { queryPlanEvents } from "../utils/queryPlanEvents";
+import ExecutionPlanDisplay from "./ExecutionPlanDisplay";
 
 interface ChatInterfaceProps {
   onNewConversation?: () => void;
@@ -63,6 +66,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState("");
+  const [executionSteps, setExecutionSteps] = useState<QueryPlanStep[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Get selected conversation from store
@@ -70,6 +74,45 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
 
   // Get selected database from store
   const { selectedDatabase } = useDatabaseStore();
+
+  // Subscribe to query plan events
+  useEffect(() => {
+    const unsubscribe = queryPlanEvents.subscribe((event: QueryPlanEvent) => {
+      switch (event.type) {
+        case "plan_generated":
+          // Show execution plan steps
+          if (event.steps) {
+            setExecutionSteps(event.steps);
+          }
+          break;
+
+        case "step_started":
+        case "step_completed":
+        case "step_error":
+          // Update step status
+          if (event.step) {
+            setExecutionSteps((prevSteps) =>
+              prevSteps.map((step) =>
+                step.id === event.step!.id ? event.step! : step
+              )
+            );
+          }
+          break;
+
+        case "plan_completed":
+          // Hide execution plan after a short delay
+          setTimeout(() => {
+            setExecutionSteps([]);
+          }, 1000);
+          break;
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      unsubscribe();
+    };
+  }, []);
 
   // Auto-resize textarea based on content
   useEffect(() => {
@@ -537,6 +580,11 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
 
       {/* Input Area */}
       <div className="p-4 border-t border-gray-200">
+        {/* Execution Plan Display */}
+        {executionSteps.length > 0 && (
+          <ExecutionPlanDisplay steps={executionSteps} />
+        )}
+
         <form onSubmit={handleSubmit} className="flex items-end gap-2">
           <textarea
             ref={textareaRef}

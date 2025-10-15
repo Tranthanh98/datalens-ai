@@ -7,6 +7,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { SchemaService } from "../db/services";
 import type { DatabaseInfo } from "../db/types";
+import type { QueryPlanStep as EventQueryPlanStep } from "../utils/queryPlanEvents";
+import { queryPlanEvents } from "../utils/queryPlanEvents";
 
 // Initialize Gemini AI
 const ai = new GoogleGenAI({
@@ -351,16 +353,57 @@ export class AIService {
         conversationHistory
       );
 
+      // Emit plan generated event
+      const eventSteps: EventQueryPlanStep[] = plan.steps.map((step) => ({
+        id: step.id,
+        type: step.type,
+        description: step.description,
+        sql: step.sql,
+        status: "pending" as const,
+      }));
+
+      queryPlanEvents.emit({
+        type: "plan_generated",
+        planId: plan.id,
+        steps: eventSteps,
+      });
+
       // Step 2: Execute each step in the plan
       for (const step of plan.steps) {
         if (step.type === "query" && step.sql) {
           try {
+            // Emit step started event
+            queryPlanEvents.emit({
+              type: "step_started",
+              planId: plan.id,
+              step: {
+                id: step.id,
+                type: step.type,
+                description: step.description,
+                sql: step.sql,
+                status: "running",
+              },
+            });
+
             // Execute SQL query
             const result = await executeSQL(step.sql);
             step.result = result;
 
             // Add to context for next steps
             plan.context.push({ step, result });
+
+            // Emit step completed event
+            queryPlanEvents.emit({
+              type: "step_completed",
+              planId: plan.id,
+              step: {
+                id: step.id,
+                type: step.type,
+                description: step.description,
+                sql: step.sql,
+                status: "completed",
+              },
+            });
 
             // Step 3: Refine plan based on current results
             if (plan.steps.indexOf(step) < plan.steps.length - 1) {
@@ -374,6 +417,20 @@ export class AIService {
               sqlError instanceof Error ? sqlError.message : String(sqlError);
             step.result = { error: errorMessage };
             plan.context.push({ step, result: step.result });
+
+            // Emit step error event
+            queryPlanEvents.emit({
+              type: "step_error",
+              planId: plan.id,
+              step: {
+                id: step.id,
+                type: step.type,
+                description: step.description,
+                sql: step.sql,
+                status: "error",
+              },
+              error: errorMessage,
+            });
           }
         }
       }
@@ -389,6 +446,12 @@ export class AIService {
       if (lastExecutedStep?.sql) {
         plan.finalSQL = lastExecutedStep.sql;
       }
+
+      // Emit plan completed event
+      queryPlanEvents.emit({
+        type: "plan_completed",
+        planId: plan.id,
+      });
 
       return { answer: finalAnswer, plan };
     } catch (error) {

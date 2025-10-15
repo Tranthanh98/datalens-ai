@@ -1,19 +1,14 @@
-import { Plus, Send, Edit3, Check } from "lucide-react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { Check, Edit3, Plus, Send } from "lucide-react";
 import { useState } from "react";
-import { useLiveQuery } from 'dexie-react-hooks';
-import { MessageService, ConversationService } from '../db/services';
-import { useChatStore, useDatabaseStore } from '../store';
-import { runAIQuery } from '../services/aiService';
-import { QueryExecutionApiService } from '../services/queryExecutionApiService';
-import { legacyToDatabase } from '../db/adapters';
-import type { DatabaseInfo } from '../db/types';
-
-interface Message {
-  id: string;
-  content: string;
-  type: "user" | "ai";
-  timestamp: Date;
-}
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { legacyToDatabase } from "../db/adapters";
+import { ConversationService, MessageService } from "../db/services";
+import type { DatabaseInfo } from "../db/types";
+import { runAIQuery } from "../services/aiService";
+import { QueryExecutionApiService } from "../services/queryExecutionApiService";
+import { useChatStore, useDatabaseStore } from "../store";
 
 interface ChatInterfaceProps {
   onNewConversation?: () => void;
@@ -24,40 +19,44 @@ interface ChatInterfaceProps {
  * Displays message history and provides input for new messages
  * Fetches messages internally using useLiveQuery
  */
-const ChatInterface: React.FC<ChatInterfaceProps> = ({
-  onNewConversation,
-}) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState("");
-  
+
   // Get selected conversation from store
   const { selectedConversationId } = useChatStore();
-  
+
   // Get selected database from store
   const { selectedDatabase } = useDatabaseStore();
 
   // Fetch messages for selected conversation using useLiveQuery
-  const messages = useLiveQuery(async () => {
-    if (!selectedConversationId) return [];
-    
-    const msgList = await MessageService.getByConversation(parseInt(selectedConversationId));
-    return msgList.map(msg => ({
-      id: msg.id!.toString(),
-      content: msg.content,
-      type: msg.type as "user" | "ai",
-      timestamp: msg.createdAt,
-    }));
-  }, [selectedConversationId]) || [];
+  const messages =
+    useLiveQuery(async () => {
+      if (!selectedConversationId) return [];
+
+      const msgList = await MessageService.getByConversation(
+        parseInt(selectedConversationId)
+      );
+      return msgList.map((msg) => ({
+        id: msg.id!.toString(),
+        content: msg.content,
+        type: msg.type as "user" | "ai",
+        timestamp: msg.createdAt,
+      }));
+    }, [selectedConversationId]) || [];
 
   // Fetch conversation title
-  const conversationTitle = useLiveQuery(async () => {
-    if (!selectedConversationId) return "Chat";
-    
-    const conversation = await ConversationService.getById(parseInt(selectedConversationId));
-    return conversation?.title || "Chat";
-  }, [selectedConversationId]) || "Chat";
+  const conversationTitle =
+    useLiveQuery(async () => {
+      if (!selectedConversationId) return "Chat";
+
+      const conversation = await ConversationService.getById(
+        parseInt(selectedConversationId)
+      );
+      return conversation?.title || "Chat";
+    }, [selectedConversationId]) || "Chat";
 
   /**
    * Handle starting title edit mode
@@ -80,7 +79,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       );
       setIsEditingTitle(false);
     } catch (error) {
-      console.error('Failed to update conversation title:', error);
+      console.error("Failed to update conversation title:", error);
     }
   };
 
@@ -96,9 +95,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
    * Handle key press in title input
    */
   const handleTitleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       handleSaveTitle();
-    } else if (e.key === 'Escape') {
+    } else if (e.key === "Escape") {
       handleCancelEditTitle();
     }
   };
@@ -108,9 +107,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
    */
   const handleSendMessage = async (message: string) => {
     if (!selectedConversationId) return;
-    
+
     setIsLoading(true);
-    
+
     try {
       const convId = parseInt(selectedConversationId);
 
@@ -118,58 +117,62 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       await MessageService.add({
         conversationId: convId,
         content: message,
-        type: 'user',
+        type: "user",
       });
 
       // Show immediate mock response to user
       const mockResponse = `I understand you want to query: "${message}". Let me help you with that.`;
-      
+
       const aiMessageId = await MessageService.add({
         conversationId: convId,
         content: mockResponse,
-        type: 'ai',
+        type: "ai",
       });
 
       // Now execute the actual AI query in the background
-       if (selectedDatabase) {
-         try {
-           // Convert legacy database to DatabaseInfo format
-           const databaseInfo: DatabaseInfo = {
-             ...legacyToDatabase(selectedDatabase),
-             id: parseInt(selectedDatabase.id),
-             isActive: true,
-             createdAt: new Date(),
-             updatedAt: new Date(),
-           };
+      if (selectedDatabase) {
+        try {
+          // Convert legacy database to DatabaseInfo format
+          const databaseInfo: DatabaseInfo = {
+            ...legacyToDatabase(selectedDatabase),
+            id: parseInt(selectedDatabase.id),
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
 
-           // Convert to DatabaseConnectionInfo for the API service
-           const connectionInfo = {
-             type: databaseInfo.type,
-             host: databaseInfo.host || 'localhost',
-             port: databaseInfo.port || 5432,
-             database: databaseInfo.database || '',
-             username: databaseInfo.username || '',
-             password: databaseInfo.password || '',
-             ssl: databaseInfo.ssl,
-           };
+          // Convert to DatabaseConnectionInfo for the API service
+          const connectionInfo = {
+            type: databaseInfo.type,
+            host: databaseInfo.host || "localhost",
+            port: databaseInfo.port || 5432,
+            database: databaseInfo.database || "",
+            username: databaseInfo.username || "",
+            password: databaseInfo.password || "",
+            ssl: databaseInfo.ssl,
+          };
 
-           // Create executeSQL function using the API service
-           const executeSQL = QueryExecutionApiService.createExecutor(connectionInfo);
+          // Create executeSQL function using the API service
+          const executeSQL =
+            QueryExecutionApiService.createExecutor(connectionInfo);
 
-           // Execute AI query
-           const aiResponse = await runAIQuery(message, databaseInfo, executeSQL);
+          // Execute AI query
+          const aiResponse = await runAIQuery(
+            message,
+            databaseInfo,
+            executeSQL
+          );
 
           // Update the AI message with the real response
           await MessageService.update(aiMessageId, {
             content: aiResponse,
           });
-
         } catch (aiError) {
-          console.error('AI Query failed:', aiError);
-          
+          console.error("AI Query failed:", aiError);
+
           // Update message with error information
           const errorMessage = `I apologize, but I encountered an error while processing your query: "${message}". Please check your database connection and try again.`;
-          
+
           await MessageService.update(aiMessageId, {
             content: errorMessage,
           });
@@ -177,15 +180,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       } else {
         // No database selected - update message with instruction
         const noDatabaseMessage = `To help you query your data, please select a database first. You can add and configure databases in the settings.`;
-        
+
         await MessageService.update(aiMessageId, {
           content: noDatabaseMessage,
         });
       }
-      
+
       setIsLoading(false);
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error("Failed to send message:", error);
       setIsLoading(false);
     }
   };
@@ -220,10 +223,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 {conversationTitle}
               </h2>
             )}
-            
+
             {selectedConversationId && (
               <button
-                onClick={isEditingTitle ? handleSaveTitle : handleStartEditTitle}
+                onClick={
+                  isEditingTitle ? handleSaveTitle : handleStartEditTitle
+                }
                 className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors flex-shrink-0"
                 title={isEditingTitle ? "Save title" : "Edit title"}
               >
@@ -235,7 +240,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
               </button>
             )}
           </div>
-          
+
           {onNewConversation && (
             <button
               onClick={onNewConversation}
@@ -268,7 +273,100 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     : "bg-gray-100 text-gray-800"
                 }`}
               >
-                <p className="text-sm">{message.content}</p>
+                {message.type === "ai" ? (
+                  <div className="text-sm markdown-content">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        h1: ({ children }) => (
+                          <h1 className="text-lg font-bold mb-2 text-gray-900">
+                            {children}
+                          </h1>
+                        ),
+                        h2: ({ children }) => (
+                          <h2 className="text-base font-bold mb-2 text-gray-900">
+                            {children}
+                          </h2>
+                        ),
+                        h3: ({ children }) => (
+                          <h3 className="text-sm font-bold mb-1 text-gray-900">
+                            {children}
+                          </h3>
+                        ),
+                        p: ({ children }) => (
+                          <p className="mb-2 text-gray-800 leading-relaxed">
+                            {children}
+                          </p>
+                        ),
+                        ul: ({ children }) => (
+                          <ul className="list-disc list-inside mb-2 text-gray-800">
+                            {children}
+                          </ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol className="list-decimal list-inside mb-2 text-gray-800">
+                            {children}
+                          </ol>
+                        ),
+                        li: ({ children }) => (
+                          <li className="mb-1 text-gray-800">{children}</li>
+                        ),
+                        strong: ({ children }) => (
+                          <strong className="font-bold text-gray-900">
+                            {children}
+                          </strong>
+                        ),
+                        em: ({ children }) => (
+                          <em className="italic text-gray-800">{children}</em>
+                        ),
+                        code: ({ children }) => (
+                          <code className="bg-gray-200 text-gray-800 px-1 py-0.5 rounded text-xs font-mono">
+                            {children}
+                          </code>
+                        ),
+                        pre: ({ children }) => (
+                          <pre className="bg-gray-200 p-2 rounded mb-2 overflow-x-auto text-xs">
+                            {children}
+                          </pre>
+                        ),
+                        table: ({ children }) => (
+                          <table className="w-full border-collapse border border-gray-300 mb-2 text-xs">
+                            {children}
+                          </table>
+                        ),
+                        thead: ({ children }) => (
+                          <thead className="bg-gray-200">{children}</thead>
+                        ),
+                        tbody: ({ children }) => <tbody>{children}</tbody>,
+                        tr: ({ children }) => (
+                          <tr className="border-b border-gray-300">
+                            {children}
+                          </tr>
+                        ),
+                        th: ({ children }) => (
+                          <th className="border border-gray-300 px-2 py-1 text-left font-bold">
+                            {children}
+                          </th>
+                        ),
+                        td: ({ children }) => (
+                          <td className="border border-gray-300 px-2 py-1">
+                            {children}
+                          </td>
+                        ),
+                        blockquote: ({ children }) => (
+                          <blockquote className="border-l-4 border-gray-400 pl-3 italic text-gray-700 mb-2">
+                            {children}
+                          </blockquote>
+                        ),
+                        hr: () => <hr className="my-3 border-gray-300" />,
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <p className="text-sm">{message.content}</p>
+                )}
                 <span className="text-xs opacity-70 mt-1 block">
                   {message.timestamp.toLocaleTimeString()}
                 </span>

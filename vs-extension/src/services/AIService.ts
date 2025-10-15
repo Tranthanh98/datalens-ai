@@ -359,7 +359,7 @@ export class AIService {
   ): Promise<string> {
     try {
       const prompt = `
-Based on the following information, provide a clear and concise answer to the user's question.
+Based on the following information, provide a clear and well-formatted Markdown response to the user's question.
 
 USER QUESTION: "${question}"
 
@@ -369,13 +369,40 @@ ${sqlQuery}
 QUERY RESULTS:
 ${JSON.stringify(queryResults, null, 2)}
 
-Provide a natural language answer that:
-1. Directly answers the user's question
-2. Includes relevant data from the results
-3. Is easy to understand
-4. Mentions any important insights from the data
+Format your response as professional Markdown with:
+1. A clear heading for the main answer
+2. Use tables for data presentation when appropriate
+3. Use bullet points or numbered lists for key insights
+4. Use code blocks for SQL queries if mentioned
+5. Use bold/italic for emphasis
+6. Include key statistics or findings
 
-Answer:
+Structure example:
+# Query Results
+
+## Summary
+Brief overview of what was found...
+
+## Key Findings
+- **Total records**: X
+- **Key insight**: Description
+
+## Data Details
+| Column | Value | Notes |
+|--------|-------|-------|
+| ... | ... | ... |
+
+## SQL Query Used
+\`\`\`sql
+${sqlQuery}
+\`\`\`
+
+---
+*Generated from database query*
+
+Generate the response following this structure but adapt it naturally to the specific data and question.
+
+Answer (in Markdown format):
       `.trim();
 
       const result = await this.ai.models.generateContent({
@@ -385,11 +412,11 @@ Answer:
 
       return (
         result.text ||
-        "Unable to generate an answer based on the query results."
+        "# Unable to Generate Answer\n\nI couldn't generate an answer based on the query results. Please try rephrasing your question or check your database connection."
       );
     } catch (error) {
       console.error("Error generating answer:", error);
-      return "Unable to generate an answer based on the query results.";
+      return "# Error\n\nUnable to generate an answer based on the query results.";
     }
   }
 
@@ -543,7 +570,7 @@ Return only valid JSON.
   private async generateFinalAnswer(plan: QueryPlan): Promise<string> {
     try {
       const prompt = `
-Based on the query execution results, provide a clear answer to the user's question.
+Based on the query execution results, provide a clear answer to the user's question in well-formatted Markdown.
 
 ORIGINAL QUESTION: "${plan.question}"
 EXECUTION RESULTS:
@@ -556,13 +583,38 @@ Result: ${JSON.stringify(ctx.result, null, 2)}
   )
   .join("\n")}
 
-Provide a natural language answer that:
-1. Directly answers the user's question
-2. Includes relevant data from the results
-3. Is easy to understand
-4. Mentions any limitations or assumptions
+Format your response as professional Markdown with:
+1. A clear heading for the main answer
+2. Use tables for data presentation when appropriate
+3. Use bullet points or numbered lists for key insights
+4. Use code blocks for SQL queries if mentioned
+5. Use bold/italic for emphasis
+6. Include a summary section if there are multiple insights
 
-Answer:
+Structure example:
+# Query Results
+
+## Summary
+Brief overview of what was found...
+
+## Key Findings
+- **Finding 1**: Description with data
+- **Finding 2**: Description with data
+
+## Data Details
+| Column | Value | Description |
+|--------|-------|-------------|
+| ... | ... | ... |
+
+## Insights
+Additional analysis or recommendations...
+
+---
+*Note: Any limitations or assumptions*
+
+Generate the response following this structure but adapt it naturally to the specific data and question.
+
+Answer (in Markdown format):
       `.trim();
 
       const result = await this.ai.models.generateContent({
@@ -572,11 +624,11 @@ Answer:
 
       return (
         result.text ||
-        "Unable to generate a comprehensive answer based on the query results."
+        "# Unable to Generate Answer\n\nI couldn't generate a comprehensive answer based on the query results. Please try rephrasing your question or check your database connection."
       );
     } catch (error) {
       console.error("Error generating final answer:", error);
-      return "Unable to generate a comprehensive answer based on the query results.";
+      return "# Error\n\nUnable to generate a comprehensive answer based on the query results.";
     }
   }
 

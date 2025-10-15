@@ -294,6 +294,17 @@ export class DatabaseService {
             AND t.TABLE_NAME NOT LIKE '%audit%'
             AND t.TABLE_NAME NOT LIKE '%vw%'
             AND t.TABLE_NAME NOT LIKE '%migration%'
+            AND t.TABLE_NAME not like '%WebMenu%'
+            AND (t.TABLE_NAME like '%Retailer%'
+              OR t.TABLE_NAME like '%Matter%'
+              OR t.TABLE_NAME like '%Client%'
+              OR t.TABLE_NAME like '%Login%'
+              OR t.TABLE_NAME like '%Order%'
+              OR t.TABLE_NAME like '%Service%'
+              OR t.TABLE_NAME like '%Role%'
+              OR t.TABLE_NAME like '%Quote%'
+              OR t.TABLE_NAME like '%Status%'
+          )
         ORDER BY t.TABLE_NAME;
       `;
 

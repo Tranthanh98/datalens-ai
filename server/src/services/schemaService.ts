@@ -99,17 +99,16 @@ export class SchemaService {
         encrypt: connectionInfo.ssl || false,
         trustServerCertificate: true,
       },
-      connectionTimeout: 10000,
+      connectionTimeout: 60000,
+      requestTimeout: 300000,
     });
     try {
       await pool.connect();
       const schemaQuery = this.queryLoader.getQuery("mssql");
-      schemaQuery.replace("{{database}}", connectionInfo.database);
       const result = await pool.request().query(schemaQuery);
 
-      await pool.close();
-
-      return result.recordset[0]?.schema_json || [];
+      console.log("SQL Server schema query result:", result.recordset);
+      return result.recordset || [];
     } catch (error) {
       console.error("SQL Server schema query error:", error);
       throw new Error(`Failed to execute SQL Server schema query: ${error}`);

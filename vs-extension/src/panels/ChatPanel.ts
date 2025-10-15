@@ -95,32 +95,26 @@ export class ChatPanel implements vscode.WebviewViewProvider {
       // Initialize AI service
       const aiService = new AIService(apiKey);
 
-      // Generate SQL query
-      const queryResult = await aiService.generateSQLQuery(
+      // Create SQL executor function
+      const executeSQL = async (
+        sql: string
+      ): Promise<Record<string, unknown>[]> => {
+        const result = await DatabaseService.executeQuery(
+          activeConnection,
+          sql
+        );
+        if (!result.success) {
+          throw new Error(result.error || "Failed to execute query");
+        }
+        return result.data || [];
+      };
+
+      // Run AI query with multi-step reasoning
+      const answer = await aiService.runAIQuery(
         message,
         schema,
-        activeConnection.type
-      );
-
-      if (!queryResult.success || !queryResult.sql) {
-        throw new Error(queryResult.error || "Failed to generate SQL query");
-      }
-
-      // Execute query
-      const executionResult = await DatabaseService.executeQuery(
-        activeConnection,
-        queryResult.sql
-      );
-
-      if (!executionResult.success) {
-        throw new Error(executionResult.error || "Failed to execute query");
-      }
-
-      // Generate final answer
-      const answer = await aiService.generateAnswer(
-        message,
-        queryResult.sql,
-        executionResult.data || []
+        activeConnection.type,
+        executeSQL
       );
 
       // Add AI response

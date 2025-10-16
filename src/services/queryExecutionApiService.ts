@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // Define the database connection interface for frontend use
 export interface DatabaseConnectionInfo {
-  type: 'postgresql' | 'mysql' | 'mssql';
+  type: "postgresql" | "mysql" | "mssql";
   host: string;
   port: number;
   database: string;
@@ -13,7 +14,8 @@ export interface DatabaseConnectionInfo {
  * Service for executing SQL queries via the backend API
  */
 export class QueryExecutionApiService {
-  private static readonly BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+  private static readonly BASE_URL =
+    import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
 
   /**
    * Execute a SQL query using the backend API
@@ -21,18 +23,15 @@ export class QueryExecutionApiService {
    * @param query - SQL query to execute
    * @returns Promise with query results
    */
-  static async executeQuery(
-    connectionInfo: DatabaseConnectionInfo,
-    query: string
-  ): Promise<any> {
+  static async executeQuery(databaseId: number, query: string): Promise<any> {
     try {
       const response = await fetch(`${this.BASE_URL}/api/execute-sql`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          connectionInfo,
+          databaseId,
           query,
         }),
       });
@@ -47,7 +46,7 @@ export class QueryExecutionApiService {
       const result = await response.json();
       return result.data;
     } catch (error) {
-      console.error('Error executing SQL query:', error);
+      console.error("Error executing SQL query:", error);
       throw error;
     }
   }
@@ -58,9 +57,9 @@ export class QueryExecutionApiService {
    * @param connectionInfo - Database connection information
    * @returns Function that executes SQL queries for this connection
    */
-  static createExecutor(connectionInfo: DatabaseConnectionInfo) {
+  static createExecutor(databaseId: number) {
     return async (sql: string): Promise<any> => {
-      return this.executeQuery(connectionInfo, sql);
+      return this.executeQuery(databaseId, sql);
     };
   }
 }

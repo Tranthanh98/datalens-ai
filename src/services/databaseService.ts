@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { SchemaService } from "../db/services";
 
 export type DatabaseType = "mssql" | "postgresql" | "mysql";
 
@@ -74,7 +73,7 @@ export class DatabaseSchemaService {
    * Fetch database schema from API
    */
   static async fetchSchema(
-    connection: DatabaseConnection
+    databaseId: string
   ): Promise<SchemaIntrospectionResult> {
     try {
       // Call schema API endpoint
@@ -86,13 +85,7 @@ export class DatabaseSchemaService {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          type: connection.type,
-          host: connection.host,
-          port: connection.port,
-          database: connection.database,
-          username: connection.username,
-          password: connection.password,
-          ssl: connection.ssl || false,
+          databaseId,
         }),
       });
 
@@ -127,25 +120,42 @@ export class DatabaseSchemaService {
   }
 
   /**
-   * Save schema to IndexedDB
-   */
-  /**
-   * Save schema data to database
+   * Save schema data to database via API
    * Stores the complete schema as a single JSON object
    */
   static async saveSchemaToDatabase(
     databaseId: number,
     schemaData: any[]
-  ): Promise<void> {
+  ): Promise<any> {
     try {
-      // Clear existing schema for this database
-      await SchemaService.clearForDatabase(databaseId);
+      // Save schema to PostgreSQL via API
+      const serverUrl =
+        import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
+      const response = await fetch(
+        `${serverUrl}/api/databases/${databaseId}/schema`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            tables: schemaData,
+          }),
+        }
+      );
 
-      // Save the complete schema as a single JSON object
-      await SchemaService.save({
-        databaseId,
-        schema: schemaData, // Store the entire schema array as JSON
-      });
+      if (!response.ok) {
+        throw new Error("Failed to save schema to database");
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to save schema");
+      }
+
+      console.log("Schema saved successfully:", result.message);
+      return result;
     } catch (error) {
       console.error("Failed to save schema to database:", error);
       throw error;

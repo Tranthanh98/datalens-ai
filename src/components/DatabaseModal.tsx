@@ -1,10 +1,10 @@
 import { AlertCircle, CheckCircle, Database, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { cleanAndEnrichSchema } from "../services/aiService";
 import DatabaseSchemaService, {
   type DatabaseType,
   type DatabaseConnection as SchemaConnection,
 } from "../services/databaseService";
+import { useDatabaseStore } from "../store";
 import { parseConnectionString } from "../utils/connectionStringParser";
 
 interface DatabaseConnection {
@@ -23,7 +23,7 @@ interface DatabaseConnection {
 interface DatabaseModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAddDatabase: (database: DatabaseConnection) => Promise<number>;
+  // onAddDatabase: (database: DatabaseConnection) => Promise<number>;
 }
 
 type ConnectionMethod = "connection_string" | "standard";
@@ -44,11 +44,7 @@ interface FormData {
  * DatabaseModal component for adding new database connections
  * Supports MSSQL, PostgreSQL, and MySQL with both connection string and standard form inputs
  */
-const DatabaseModal: React.FC<DatabaseModalProps> = ({
-  isOpen,
-  onClose,
-  onAddDatabase,
-}) => {
+const DatabaseModal: React.FC<DatabaseModalProps> = ({ isOpen, onClose }) => {
   const [connectionMethod, setConnectionMethod] =
     useState<ConnectionMethod>("standard");
   const [databaseType, setDatabaseType] = useState<DatabaseType>("postgresql");
@@ -62,6 +58,8 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
   const [schemaFetchStatus, setSchemaFetchStatus] = useState<
     "idle" | "fetching" | "cleaning" | "success" | "error"
   >("idle");
+
+  const { addDatabase } = useDatabaseStore();
 
   // Form state
   const [formData, setFormData] = useState({
@@ -230,11 +228,17 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
     setSchemaFetchStatus("idle");
 
     try {
-      // Create database object
-      const newDatabase: DatabaseConnection = {
-        id: Date.now().toString(),
-        name: formData.name,
-        type: databaseType,
+      let dbPayload: {
+        name: string;
+        type: DatabaseType;
+        connectionString?: string;
+        host?: string;
+        port?: number;
+        database?: string;
+        username?: string;
+        password?: string;
+        ssl?: boolean;
+        isActive: boolean;
       };
 
       if (connectionMethod === "connection_string") {
@@ -251,114 +255,141 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
 
         const parsedData = parseResult.data!;
 
-        // Save both connection string and parsed parameters
-        newDatabase.connectionString = formData.connectionString;
-        newDatabase.host = parsedData.host;
-        newDatabase.port = parsedData.port;
-        newDatabase.database = parsedData.database;
-        newDatabase.username = parsedData.username;
-        newDatabase.password = parsedData.password;
-        newDatabase.ssl = parsedData.ssl || false;
+        // Prepare payload for API
+        dbPayload = {
+          name: formData.name,
+          type: databaseType,
+          connectionString: formData.connectionString,
+          host: parsedData.host,
+          port: parsedData.port,
+          database: parsedData.database,
+          username: parsedData.username,
+          password: parsedData.password,
+          ssl: parsedData.ssl || false,
+          isActive: true,
+        };
       } else {
-        newDatabase.host = formData.host;
-        newDatabase.port = formData.port;
-        newDatabase.database = formData.database;
-        newDatabase.username = formData.username;
-        newDatabase.password = formData.password;
-        newDatabase.ssl = formData.ssl;
+        dbPayload = {
+          name: formData.name,
+          type: databaseType,
+          host: formData.host,
+          port: formData.port,
+          database: formData.database,
+          username: formData.username,
+          password: formData.password,
+          ssl: formData.ssl,
+          isActive: true,
+        };
       }
 
-      // Add database first
-      const dbId = await onAddDatabase(newDatabase);
+      // Save database to PostgreSQL via API
+      const serverUrl =
+        import.meta.env.VITE_BACKEND_URL || "http://localhost:3001";
+      const createDbResponse = await fetch(`${serverUrl}/api/databases`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(dbPayload),
+      });
 
-      newDatabase.id = dbId.toString();
+      if (!createDbResponse.ok) {
+        throw new Error("Failed to create database connection");
+      }
+
+      const createDbResult = await createDbResponse.json();
+
+      if (!createDbResult.success || !createDbResult.data) {
+        throw new Error(createDbResult.error || "Failed to create database");
+      }
+
+      const dbId = createDbResult.data.id;
+      console.log("Database created with ID:", dbId);
+
+      addDatabase({
+        id: dbId.toString(),
+        ...dbPayload,
+      });
+
+      // Notify parent component (for backward compatibility with IndexedDB)
 
       // Fetch and save schema in background
-      setSchemaFetchStatus("fetching");
+      // setSchemaFetchStatus("fetching");
 
-      try {
-        let connection: SchemaConnection;
+      // try {
+      //   // Fetch raw schema from database
+      //   const schemaResult = await DatabaseSchemaService.fetchSchema(dbId);
 
-        if (connectionMethod === "connection_string") {
-          // Parse connection string for schema fetching
-          const parseResult = parseConnectionString(formData.connectionString);
+      //   if (schemaResult.success && schemaResult.schema) {
+      //     console.log("Raw schema fetched successfully:", {
+      //       tables: schemaResult.schema.length,
+      //     });
 
-          if (!parseResult.success) {
-            setSchemaFetchStatus("error");
-            console.warn(
-              "Failed to parse connection string for schema:",
-              parseResult.error
-            );
-            return;
-          }
+      //     // Clean and enrich schema using AI
+      //     setSchemaFetchStatus("cleaning");
+      //     console.log("Cleaning and enriching schema with AI...");
+      //     const cleanResult = await cleanAndEnrichSchema(
+      //       schemaResult.schema,
+      //       databaseType
+      //     );
 
-          connection = parseResult.data!;
-        } else {
-          connection = {
-            type: databaseType,
-            host: formData.host,
-            port: formData.port,
-            database: formData.database,
-            username: formData.username,
-            password: formData.password,
-            ssl: formData.ssl,
-          };
-        }
+      //     if (cleanResult.success && cleanResult.cleanedSchema) {
+      //       console.log("Schema cleaned successfully:", cleanResult.summary);
 
-        // Fetch raw schema from database
-        const schemaResult = await DatabaseSchemaService.fetchSchema(
-          connection
-        );
+      //       // Save cleaned schema to PostgreSQL via API
+      //       const saveSchemaResponse =
+      //         await DatabaseSchemaService.saveSchemaToDatabase(
+      //           dbId,
+      //           cleanResult.cleanedSchema
+      //         );
 
-        if (schemaResult.success && schemaResult.schema) {
-          console.log("Raw schema fetched successfully:", {
-            tables: schemaResult.schema.length,
-          });
+      //       if (saveSchemaResponse.success) {
+      //         setSchemaFetchStatus("success");
+      //         console.log(
+      //           "Cleaned schema saved successfully for database:",
+      //           formData.name,
+      //           saveSchemaResponse.message
+      //         );
+      //       } else {
+      //         throw new Error(
+      //           saveSchemaResponse.error || "Failed to save schema"
+      //         );
+      //       }
+      //     } else {
+      //       // If cleaning fails, save original schema as fallback
+      //       console.warn(
+      //         "Schema cleaning failed, saving original schema:",
+      //         cleanResult.error
+      //       );
 
-          // Clean and enrich schema using AI
-          setSchemaFetchStatus("cleaning");
-          console.log("Cleaning and enriching schema with AI...");
-          const cleanResult = await cleanAndEnrichSchema(
-            schemaResult.schema,
-            databaseType
-          );
+      //       const saveSchemaResponse = await fetch(
+      //         `${serverUrl}/api/databases/${dbId}/schema`,
+      //         {
+      //           method: "POST",
+      //           headers: {
+      //             "Content-Type": "application/json",
+      //           },
+      //           body: JSON.stringify({
+      //             tables: schemaResult.schema,
+      //           }),
+      //         }
+      //       );
 
-          if (cleanResult.success && cleanResult.cleanedSchema) {
-            console.log("Schema cleaned successfully:", cleanResult.summary);
-
-            // Save cleaned schema to database
-            await DatabaseSchemaService.saveSchemaToDatabase(
-              dbId,
-              cleanResult.cleanedSchema
-            );
-
-            setSchemaFetchStatus("success");
-            console.log(
-              "Cleaned schema saved successfully for database:",
-              newDatabase.name
-            );
-            onClose();
-          } else {
-            // If cleaning fails, save original schema as fallback
-            console.warn(
-              "Schema cleaning failed, saving original schema:",
-              cleanResult.error
-            );
-            await DatabaseSchemaService.saveSchemaToDatabase(
-              dbId,
-              schemaResult.schema
-            );
-            setSchemaFetchStatus("success");
-            onClose();
-          }
-        } else {
-          setSchemaFetchStatus("error");
-          console.warn("Failed to fetch schema:", schemaResult.error);
-        }
-      } catch (schemaError) {
-        setSchemaFetchStatus("error");
-        console.error("Error fetching schema:", schemaError);
-      }
+      //       if (saveSchemaResponse.ok) {
+      //         setSchemaFetchStatus("success");
+      //         console.log("Original schema saved successfully");
+      //       } else {
+      //         setSchemaFetchStatus("error");
+      //       }
+      //     }
+      //   } else {
+      //     setSchemaFetchStatus("error");
+      //     console.warn("Failed to fetch schema:", schemaResult.error);
+      //   }
+      // } catch (schemaError) {
+      //   setSchemaFetchStatus("error");
+      //   console.error("Error fetching schema:", schemaError);
+      // }
 
       // Close modal after a brief delay to show status
       setTimeout(() => {

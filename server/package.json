@@ -6,10 +6,14 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "migrate": "tsx scripts/run-migrations.ts",
+    "migrate:status": "tsx scripts/migration-status.ts"
   },
   "dependencies": {
+    "@xenova/transformers": "^2.17.2",
     "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
     "express": "^4.18.2",
     "mssql": "^10.0.1",
     "mysql2": "^3.6.5",

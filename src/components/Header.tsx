@@ -1,5 +1,6 @@
-import { ChevronDown, Plus, RotateCcw } from "lucide-react";
+import { ChevronDown, Database, Plus, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { LegacyDatabase } from "../db/adapters";
 import { useDatabaseStore } from "../store";
 import DatabaseModal from "./DatabaseModal";
@@ -9,18 +10,15 @@ import DatabaseModal from "./DatabaseModal";
  * Now uses Zustand store for internal state management instead of props
  */
 const Header: React.FC = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
   // Zustand store hooks
-  const {
-    databases,
-    selectedDatabase,
-    initializeDatabases,
-    selectDatabase,
-    addDatabase,
-  } = useDatabaseStore();
+  const { databases, selectedDatabase, initializeDatabases, selectDatabase } =
+    useDatabaseStore();
 
   /**
    * Initialize databases on component mount
@@ -59,12 +57,12 @@ const Header: React.FC = () => {
    * Handle adding a new database from the modal
    * Now includes schema fetching and saving to schemaInfo table
    */
-  const handleAddDatabase = async (
-    database: LegacyDatabase
-  ): Promise<number> => {
-    const dbId = await addDatabase(database);
-    return dbId;
-  };
+  // const handleAddDatabase = async (
+  //   database: LegacyDatabase
+  // ): Promise<number> => {
+  //   const dbId = await addDatabase(database);
+  //   return dbId;
+  // };
 
   /**
    * Handle opening the reset confirmation modal
@@ -158,6 +156,17 @@ const Header: React.FC = () => {
 
       {/* Action Buttons */}
       <div className="flex items-center gap-2">
+        {/* Manage Database Button */}
+        {location.pathname !== "/manage-database" && (
+          <button
+            onClick={() => navigate("/manage-database")}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            <Database className="w-4 h-4" />
+            <span className="text-sm font-medium">Manage Databases</span>
+          </button>
+        )}
+
         {/* Reset Button */}
         <button
           onClick={handleOpenResetModal}
@@ -181,7 +190,7 @@ const Header: React.FC = () => {
       <DatabaseModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        onAddDatabase={handleAddDatabase}
+        // onAddDatabase={handleAddDatabase}
       />
 
       {/* Reset Confirmation Modal */}

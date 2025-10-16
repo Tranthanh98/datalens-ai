@@ -1,30 +1,26 @@
-import ChatWithDrawer from "./components/ChatWithDrawer";
+import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
 import Header from "./components/Header";
-import ResizablePanels from "./components/ResizablePanels";
-import ResultsPanel from "./components/ResultsPanel";
+import HomePage from "./pages/HomePage";
+import ManageDatabase from "./pages/ManageDatabase";
 
 /**
  * Main App component for DataLens AI
- * Manages the overall layout and state for chat and results
- * Database management is now handled by Zustand store
+ * Manages the overall layout and routing
  */
 function App() {
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      {/* Header */}
-      <Header />
+    <Router>
+      <div className="h-screen flex flex-col bg-gray-50">
+        {/* Header */}
+        <Header />
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden">
-        <ResizablePanels
-          leftPanel={<ChatWithDrawer />}
-          rightPanel={<ResultsPanel />}
-          minLeftWidth={320}
-          minRightWidth={320}
-          defaultLeftWidth={50}
-        />
+        {/* Main Content with Routes */}
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/manage-database" element={<ManageDatabase />} />
+        </Routes>
       </div>
-    </div>
+    </Router>
   );
 }
 

@@ -5,10 +5,9 @@
  */
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { SchemaService } from "../db/services";
-import type { DatabaseInfo } from "../db/types";
 import type { QueryPlanStep as EventQueryPlanStep } from "../utils/queryPlanEvents";
 import { queryPlanEvents } from "../utils/queryPlanEvents";
+import { searchSimilarTables } from "./schemaSearchService";
 
 // Initialize Gemini AI
 const ai = new GoogleGenAI({
@@ -324,26 +323,48 @@ export class AIService {
    */
   static async runAIQuery(
     question: string,
-    databaseInfo: DatabaseInfo,
+    databaseId: number,
+    databaseType: string,
     executeSQL: (sql: string) => Promise<any>,
     conversationHistory: ConversationContext[] = []
   ): Promise<{ answer: string; plan: QueryPlan }> {
     try {
-      // Extract database ID and type from databaseInfo
-      const databaseId = databaseInfo.id;
       if (!databaseId) {
         throw new Error("Database ID is required");
       }
 
-      // Get database schema
-      const schemaInfo = await SchemaService.getByDatabase(databaseId);
-      if (!schemaInfo) {
-        throw new Error("Database schema not found");
+      // Search for similar tables using semantic search API
+      const searchResult = await searchSimilarTables(databaseId, question, 20);
+
+      console.log("Search result:", searchResult);
+
+      if (!searchResult.success || !searchResult.data) {
+        console.error(
+          "Failed to retrieve relevant schema:",
+          searchResult.error
+        );
+        throw new Error(
+          `Failed to retrieve relevant schema: ${
+            searchResult.error || "Unknown error"
+          }`
+        );
       }
 
-      const schema = schemaInfo.schema;
-      // Use the actual database type from databaseInfo
-      const databaseType = databaseInfo.type;
+      // Extract schema from similar tables
+      const schema = searchResult.data.map((item) => item.schema);
+
+      console.log(
+        `Found ${schema.length} relevant tables for question: "${question}"`
+      );
+
+      // Check if schema is empty
+      if (schema.length === 0) {
+        throw new Error(
+          "No relevant tables found for this query. Please ensure your database has schema embeddings generated."
+        );
+      }
+
+      console.log("Schema sample:", JSON.stringify(schema[0], null, 2));
 
       // Step 1: AI analyzes intent and generates plan with conversation context
       const plan = await this.generatePlan(
@@ -553,22 +574,43 @@ Create a JSON response with this structure:
   ]
 }
 
-IMPORTANT SQL RESTRICTIONS:
-- ONLY generate SELECT statements
-- DO NOT use INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, or any data modification commands
-- This is a read-only system for data analysis and reporting only
-- All queries must be safe and non-destructive
-- Focus on data retrieval, filtering, aggregation, and analysis
+⚠️ CRITICAL SQL RULES - MUST FOLLOW:
+1. **COLUMN NAMES**: Use EXACT column names from the schema above
+   - DO NOT change case (e.g., keep "Logins_LoginId", not "loginId" or "logins_loginid")
+   - DO NOT convert snake_case to camelCase (e.g., keep "user_id", not "userId")
+   - DO NOT translate or rename columns
+   - DO NOT add spaces or remove underscores
+   - If schema shows "Orders.Logins_LoginId", use exactly "Logins_LoginId" in your SQL
+
+2. **TABLE NAMES**: Use EXACT table names from the schema
+   - DO NOT change case (e.g., keep "Orders", not "orders" or "ORDERS")
+   - DO NOT rename or translate tables
+   - Use the exact spelling provided in the schema
+
+3. **EXAMPLES**:
+   ✅ CORRECT: SELECT Orders.Logins_LoginId, Orders.OrderDate FROM Orders
+   ❌ WRONG: SELECT Orders.loginId, Orders.orderDate FROM orders
+   
+   ✅ CORRECT: SELECT user_id, created_at FROM user_sessions
+   ❌ WRONG: SELECT userId, createdAt FROM userSessions
+
+4. **QUERY RESTRICTIONS**:
+   - ONLY generate SELECT statements
+   - DO NOT use INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, or any data modification commands
+   - This is a read-only system for data analysis and reporting only
+   - All queries must be safe and non-destructive
+   - Focus on data retrieval, filtering, aggregation, and analysis
 
 Guidelines:
 - Break complex questions into logical steps
 - Each step should build on previous results
 - Use proper ${databaseType} SQL syntax
-- Include table and column names from the schema
-- For aggregations, ensure proper GROUP BY clauses
-- Handle JOINs carefully based on schema relationships
+- **Copy column and table names EXACTLY as they appear in the schema** - do not modify them in any way
+- For aggregations, ensure proper GROUP BY clauses with exact column names
+- Handle JOINs carefully based on schema relationships, using exact foreign key column names
 - Ensure all SQL queries are SELECT statements only
 - **Pay attention to conversation history** - if the question references previous context (userId, statusId, etc.), incorporate those values
+- Double-check that every column reference in your SQL matches the schema exactly
 
 Return only valid JSON.
     `.trim();
@@ -594,26 +636,36 @@ EXECUTION CONTEXT: ${JSON.stringify(contextSummary, null, 2)}
 
 Based on the results so far, should any remaining steps be modified?
 
-IMPORTANT SQL RESTRICTIONS:
-- ONLY generate SELECT statements
-- DO NOT use INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, or any data modification commands
-- This is a read-only system for data analysis and reporting only
-- All queries must be safe and non-destructive
-- Focus on data retrieval, filtering, aggregation, and analysis
+⚠️ CRITICAL SQL RULES - MUST FOLLOW:
+1. **COLUMN NAMES**: Use EXACT column names from the original plan and schema
+   - DO NOT change case or format (keep "Logins_LoginId", not "loginId")
+   - DO NOT convert naming conventions (keep "user_id", not "userId")
+   - Copy column names EXACTLY as they appear in the database schema
+
+2. **TABLE NAMES**: Use EXACT table names from the schema
+   - DO NOT change case (keep "Orders", not "orders")
+   - Maintain exact spelling and format
+
+3. **QUERY RESTRICTIONS**:
+   - ONLY generate SELECT statements
+   - DO NOT use INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, or any data modification commands
+   - This is a read-only system for data analysis and reporting only
+   - All queries must be safe and non-destructive
+   - Focus on data retrieval, filtering, aggregation, and analysis
 
 Return JSON with:
 {
   "shouldRefine": true/false,
   "reasoning": "explanation of refinement decision",
   "newSteps": [
-    // Any new steps needed (with SELECT queries only)
+    // Any new steps needed (with SELECT queries only, using exact column/table names)
   ],
   "modifiedSteps": [
-    // Modified existing steps (with SELECT queries only)
+    // Modified existing steps (with SELECT queries only, using exact column/table names)
   ]
 }
 
-Ensure all SQL queries in new or modified steps are SELECT statements only.
+Ensure all SQL queries use exact column and table names from the schema, and are SELECT statements only.
 
 Return only valid JSON.
     `.trim();
@@ -898,6 +950,7 @@ YOUR TASKS:
    - Cache tables
    - Framework-specific tables (e.g., Django admin, Laravel jobs)
    - Any tables that don't contain meaningful business data
+   - Delete unrelated tables ratio must be below 10% to avoid losing context
 
 2. **Keep relevant tables** that contain:
    - Business entities (users, products, orders, etc.)
@@ -969,58 +1022,6 @@ Return a JSON response following the schema structure.
       (table: any) => table.isRelevant
     );
 
-    // Validate that AI didn't change table/column names
-    const validationErrors: string[] = [];
-
-    // Extract unique table names from raw schema
-    const rawTableNames = new Set(
-      rawSchema.map((row: any) => row.table_name || row.tableName)
-    );
-
-    // Check each cleaned table
-    for (const table of relevantSchema) {
-      // Verify table name exists in raw schema
-      if (!rawTableNames.has(table.tableName)) {
-        validationErrors.push(
-          `Table name changed: "${table.tableName}" not found in original schema`
-        );
-      }
-
-      // Get original columns for this table
-      const originalColumns = rawSchema
-        .filter(
-          (row: any) => (row.table_name || row.tableName) === table.tableName
-        )
-        .map((row: any) => row.column_name || row.columnName);
-
-      // Check each column name wasn't modified
-      for (const column of table.columns) {
-        if (!originalColumns.includes(column.columnName)) {
-          validationErrors.push(
-            `Column name changed in table "${table.tableName}": "${column.columnName}" not found in original schema`
-          );
-        }
-      }
-    }
-
-    // If validation errors found, reject the cleaning
-    if (validationErrors.length > 0) {
-      console.error("Schema cleaning validation failed:", validationErrors);
-      return {
-        success: false,
-        error: `AI modified table/column names. Validation errors:\n${validationErrors.join(
-          "\n"
-        )}`,
-      };
-    }
-
-    console.log("Schema cleaning complete:", {
-      original: rawSchema.length,
-      cleaned: relevantSchema.length,
-      removed: cleanedData.removedTables?.length || 0,
-      summary: cleanedData.summary,
-    });
-
     return {
       success: true,
       cleanedSchema: relevantSchema,
@@ -1042,13 +1043,15 @@ Return a JSON response following the schema structure.
  */
 export async function runAIQuery(
   question: string,
-  databaseInfo: DatabaseInfo,
+  databaseId: number,
+  databaseType: string,
   executeSQL: (sql: string) => Promise<any>,
   conversationHistory: ConversationContext[] = []
 ): Promise<{ answer: string; plan: QueryPlan }> {
   return AIService.runAIQuery(
     question,
-    databaseInfo,
+    databaseId,
+    databaseType,
     executeSQL,
     conversationHistory
   );

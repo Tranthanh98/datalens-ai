@@ -1,12 +1,10 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useCallback, useEffect, useState } from "react";
-import { legacyToDatabase } from "../db/adapters";
 import {
   ConversationService,
   MessageService,
   QueryResultService,
 } from "../db/services";
-import type { DatabaseInfo } from "../db/types";
 import { runAIQuery } from "../services/aiService";
 import { QueryExecutionApiService } from "../services/queryExecutionApiService";
 import { useChatStore, useDatabaseStore } from "../store";
@@ -216,29 +214,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
         // Now execute the actual AI query in the background
         if (selectedDatabase) {
           try {
-            // Convert legacy database to DatabaseInfo format
-            const databaseInfo: DatabaseInfo = {
-              ...legacyToDatabase(selectedDatabase),
-              id: parseInt(selectedDatabase.id),
-              isActive: true,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            };
-
-            // Convert to DatabaseConnectionInfo for the API service
-            const connectionInfo = {
-              type: databaseInfo.type,
-              host: databaseInfo.host || "localhost",
-              port: databaseInfo.port || 5432,
-              database: databaseInfo.database || "",
-              username: databaseInfo.username || "",
-              password: databaseInfo.password || "",
-              ssl: databaseInfo.ssl,
-            };
-
             // Create executeSQL function using the API service
-            const executeSQL =
-              QueryExecutionApiService.createExecutor(connectionInfo);
+            const executeSQL = QueryExecutionApiService.createExecutor(
+              parseInt(selectedDatabase.id)
+            );
 
             // Build conversation history context (last 3-4 exchanges)
             const recentMessages = await MessageService.getByConversation(
@@ -285,7 +264,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
             // Execute AI query with conversation context
             const { answer: aiResponse, plan } = await runAIQuery(
               message,
-              databaseInfo,
+              parseInt(selectedDatabase.id),
+              selectedDatabase.type || "postgresql",
               executeSQL,
               conversationHistory
             );

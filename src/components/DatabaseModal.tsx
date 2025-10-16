@@ -1,5 +1,6 @@
 import { AlertCircle, CheckCircle, Database, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { cleanAndEnrichSchema } from "../services/aiService";
 import DatabaseSchemaService, {
   type DatabaseType,
   type DatabaseConnection as SchemaConnection,
@@ -59,7 +60,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
     useState<string>("");
   const [isSavingDatabase, setIsSavingDatabase] = useState(false);
   const [schemaFetchStatus, setSchemaFetchStatus] = useState<
-    "idle" | "fetching" | "success" | "error"
+    "idle" | "fetching" | "cleaning" | "success" | "error"
   >("idle");
 
   // Form state
@@ -87,7 +88,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
   useEffect(() => {
     const handleEscKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        handleClose();
+        onClose();
       }
     };
 
@@ -101,7 +102,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
       document.removeEventListener("keydown", handleEscKey);
       document.body.style.overflow = "unset";
     };
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   /**
    * Handle database type change and update default port
@@ -206,7 +207,7 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
           result.error || "Connection failed: Unable to connect to database."
         );
       }
-    } catch (error) {
+    } catch {
       setConnectionStatus("error");
       setConnectionError("Connection failed: Network error occurred.");
     } finally {
@@ -304,22 +305,52 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
           };
         }
 
-        // Fetch schema and save to database
+        // Fetch raw schema from database
         const schemaResult = await DatabaseSchemaService.fetchSchema(
           connection
         );
+
         if (schemaResult.success && schemaResult.schema) {
-          console.log("Schema fetched successfully:", schemaResult.schema);
-          await DatabaseSchemaService.saveSchemaToDatabase(
-            dbId,
-            schemaResult.schema
+          console.log("Raw schema fetched successfully:", {
+            tables: schemaResult.schema.length,
+          });
+
+          // Clean and enrich schema using AI
+          setSchemaFetchStatus("cleaning");
+          console.log("Cleaning and enriching schema with AI...");
+          const cleanResult = await cleanAndEnrichSchema(
+            schemaResult.schema,
+            databaseType
           );
-          setSchemaFetchStatus("success");
-          console.log(
-            "Schema saved successfully for database:",
-            newDatabase.name
-          );
-          onClose();
+
+          if (cleanResult.success && cleanResult.cleanedSchema) {
+            console.log("Schema cleaned successfully:", cleanResult.summary);
+
+            // Save cleaned schema to database
+            await DatabaseSchemaService.saveSchemaToDatabase(
+              dbId,
+              cleanResult.cleanedSchema
+            );
+
+            setSchemaFetchStatus("success");
+            console.log(
+              "Cleaned schema saved successfully for database:",
+              newDatabase.name
+            );
+            onClose();
+          } else {
+            // If cleaning fails, save original schema as fallback
+            console.warn(
+              "Schema cleaning failed, saving original schema:",
+              cleanResult.error
+            );
+            await DatabaseSchemaService.saveSchemaToDatabase(
+              dbId,
+              schemaResult.schema
+            );
+            setSchemaFetchStatus("success");
+            onClose();
+          }
         } else {
           setSchemaFetchStatus("error");
           console.warn("Failed to fetch schema:", schemaResult.error);
@@ -349,7 +380,12 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
       name: "",
       connectionString: "",
       host: "localhost",
-      port: defaultPorts[databaseType],
+      port:
+        databaseType === "postgresql"
+          ? 5432
+          : databaseType === "mysql"
+          ? 3306
+          : 1433,
       database: "",
       username: "",
       password: "",
@@ -664,6 +700,14 @@ const DatabaseModal: React.FC<DatabaseModalProps> = ({
                 <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
                 <span className="text-sm text-gray-600">
                   Fetching schema...
+                </span>
+              </>
+            )}
+            {schemaFetchStatus === "cleaning" && (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                <span className="text-sm text-purple-600">
+                  AI is cleaning and enriching schema...
                 </span>
               </>
             )}

@@ -15,7 +15,7 @@ const ExecutionPlanDisplay: React.FC<ExecutionPlanDisplayProps> = ({
   if (steps.length === 0) return null;
 
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 shadow-sm">
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3 shadow-sm max-h-[200px] overflow-y-auto">
       <div className="flex items-center gap-2 mb-2">
         <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
         <h3 className="text-sm font-semibold text-blue-900">Execution Plan</h3>

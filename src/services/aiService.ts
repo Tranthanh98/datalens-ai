@@ -729,6 +729,313 @@ Answer (in Markdown format with chartdata block):
 }
 
 /**
+ * Schema cleaning and enrichment response schema
+ */
+const SCHEMA_CLEANING_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    cleanedSchema: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          tableName: {
+            type: Type.STRING,
+            description: "Name of the table",
+          },
+          tableDescription: {
+            type: Type.STRING,
+            description:
+              "Clear description of table's purpose and business context",
+          },
+          isRelevant: {
+            type: Type.BOOLEAN,
+            description: "Whether this table is relevant for business queries",
+          },
+          category: {
+            type: Type.STRING,
+            description:
+              "Business category (e.g., 'Sales', 'Users', 'Products', 'Analytics', 'System')",
+          },
+          columns: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                columnName: {
+                  type: Type.STRING,
+                  description: "Column name",
+                },
+                dataType: {
+                  type: Type.STRING,
+                  description: "SQL data type",
+                },
+                isPrimaryKey: {
+                  type: Type.BOOLEAN,
+                  description: "Whether column is a primary key",
+                },
+                isForeignKey: {
+                  type: Type.BOOLEAN,
+                  description: "Whether column is a foreign key",
+                },
+                referencedTable: {
+                  type: Type.STRING,
+                  description: "Referenced table if foreign key",
+                },
+                isNullable: {
+                  type: Type.BOOLEAN,
+                  description: "Whether column allows NULL",
+                },
+                description: {
+                  type: Type.STRING,
+                  description:
+                    "Clear, business-friendly description of the column",
+                },
+                isRelevant: {
+                  type: Type.BOOLEAN,
+                  description: "Whether this column is useful for queries",
+                },
+              },
+              required: ["columnName", "dataType", "description", "isRelevant"],
+            },
+          },
+          primaryKey: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "Primary key column names",
+          },
+          foreignKeys: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                columnName: { type: Type.STRING },
+                referencedTable: { type: Type.STRING },
+                referencedColumn: { type: Type.STRING },
+              },
+            },
+          },
+        },
+        required: [
+          "tableName",
+          "tableDescription",
+          "isRelevant",
+          "category",
+          "columns",
+        ],
+      },
+    },
+    removedTables: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          tableName: { type: Type.STRING },
+          reason: { type: Type.STRING },
+        },
+      },
+      description: "List of tables removed and why",
+    },
+    summary: {
+      type: Type.OBJECT,
+      properties: {
+        totalTables: { type: Type.NUMBER },
+        relevantTables: { type: Type.NUMBER },
+        removedTables: { type: Type.NUMBER },
+        categories: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        },
+      },
+      description: "Summary statistics",
+    },
+  },
+  required: ["cleanedSchema", "removedTables", "summary"],
+};
+
+/**
+ * Clean and enrich database schema using AI
+ * Removes irrelevant tables and adds meaningful descriptions to improve query context
+ */
+export async function cleanAndEnrichSchema(
+  rawSchema: any[],
+  databaseType: string = "postgresql"
+): Promise<{
+  success: boolean;
+  cleanedSchema?: any[];
+  error?: string;
+  summary?: {
+    totalTables: number;
+    relevantTables: number;
+    removedTables: number;
+    categories: string[];
+  };
+}> {
+  try {
+    if (!rawSchema || rawSchema.length === 0) {
+      return {
+        success: false,
+        error: "No schema data provided",
+      };
+    }
+
+    const prompt = `
+You are a database schema expert. Clean and enrich this database schema to optimize it for AI-powered query generation.
+
+DATABASE TYPE: ${databaseType}
+RAW SCHEMA:
+${JSON.stringify(rawSchema, null, 2)}
+
+⚠️ CRITICAL RULES - MUST FOLLOW:
+1. **NEVER change table names or column names** - use EXACT names from the raw schema
+2. **NEVER rename, modify, or translate any table/column identifiers**
+3. **ONLY add descriptions and metadata** - do not alter the actual database identifiers
+
+YOUR TASKS:
+1. **Remove irrelevant tables** such as:
+   - System/internal tables (migrations, sessions, logs, audit trails)
+   - Temporary tables
+   - Cache tables
+   - Framework-specific tables (e.g., Django admin, Laravel jobs)
+   - Any tables that don't contain meaningful business data
+
+2. **Keep relevant tables** that contain:
+   - Business entities (users, products, orders, etc.)
+   - Transaction data
+   - Master data
+   - Analytics/reporting data
+   - Any tables useful for business queries
+
+3. **Enrich each relevant table** with:
+   - **tableName**: EXACT name from raw schema (DO NOT CHANGE)
+   - **tableDescription**: Clear, business-friendly description of table's purpose
+   - **category**: Business category (Sales, Users, Products, Analytics, etc.)
+   - Mark primary keys and foreign keys
+   - Relationships to other tables
+
+4. **Enrich each column** with:
+   - **columnName**: EXACT name from raw schema (DO NOT CHANGE, DO NOT TRANSLATE)
+   - **dataType**: EXACT type from raw schema (DO NOT CHANGE)
+   - **description**: Clear explanation of what data it contains (business meaning)
+   - Mark if it's relevant for queries
+   - Mark primary/foreign keys
+
+5. **Optimize for context**:
+   - Focus on columns that help answer business questions
+   - Mark technical columns as isRelevant=false instead of removing them
+   - Keep column structure intact, only add metadata
+
+IMPORTANT EXAMPLES:
+✅ CORRECT:
+  "columnName": "user_id"  // Keep exact name from database
+  "description": "Unique identifier for the user"
+
+❌ WRONG:
+  "columnName": "userId"   // Don't convert snake_case to camelCase
+  "columnName": "User ID"  // Don't add spaces
+  "columnName": "id_usuario" // Don't translate
+
+✅ CORRECT:
+  "tableName": "order_items"
+  "tableDescription": "Stores individual line items for each order"
+
+❌ WRONG:
+  "tableName": "OrderItems"  // Don't change casing
+  "tableName": "order items" // Don't add spaces
+
+GUIDELINES:
+- Be aggressive in removing system/technical tables
+- Prioritize business value over completeness
+- Descriptions should be concise but clear
+- Think about what an analyst would ask about this data
+- **PRESERVE ALL ORIGINAL NAMES EXACTLY AS THEY ARE IN THE DATABASE**
+
+Return a JSON response following the schema structure.
+    `.trim();
+
+    const result = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: SCHEMA_CLEANING_SCHEMA,
+      },
+    });
+
+    const cleanedData = JSON.parse(result.text || "{}");
+
+    // Filter to only return relevant tables
+    const relevantSchema = cleanedData.cleanedSchema.filter(
+      (table: any) => table.isRelevant
+    );
+
+    // Validate that AI didn't change table/column names
+    const validationErrors: string[] = [];
+
+    // Extract unique table names from raw schema
+    const rawTableNames = new Set(
+      rawSchema.map((row: any) => row.table_name || row.tableName)
+    );
+
+    // Check each cleaned table
+    for (const table of relevantSchema) {
+      // Verify table name exists in raw schema
+      if (!rawTableNames.has(table.tableName)) {
+        validationErrors.push(
+          `Table name changed: "${table.tableName}" not found in original schema`
+        );
+      }
+
+      // Get original columns for this table
+      const originalColumns = rawSchema
+        .filter(
+          (row: any) => (row.table_name || row.tableName) === table.tableName
+        )
+        .map((row: any) => row.column_name || row.columnName);
+
+      // Check each column name wasn't modified
+      for (const column of table.columns) {
+        if (!originalColumns.includes(column.columnName)) {
+          validationErrors.push(
+            `Column name changed in table "${table.tableName}": "${column.columnName}" not found in original schema`
+          );
+        }
+      }
+    }
+
+    // If validation errors found, reject the cleaning
+    if (validationErrors.length > 0) {
+      console.error("Schema cleaning validation failed:", validationErrors);
+      return {
+        success: false,
+        error: `AI modified table/column names. Validation errors:\n${validationErrors.join(
+          "\n"
+        )}`,
+      };
+    }
+
+    console.log("Schema cleaning complete:", {
+      original: rawSchema.length,
+      cleaned: relevantSchema.length,
+      removed: cleanedData.removedTables?.length || 0,
+      summary: cleanedData.summary,
+    });
+
+    return {
+      success: true,
+      cleanedSchema: relevantSchema,
+      summary: cleanedData.summary,
+    };
+  } catch (error) {
+    console.error("Error cleaning schema:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Schema cleaning failed",
+    };
+  }
+}
+
+/**
  * Main function to run AI-powered query
  * This is the primary interface for the AI service
  * Returns both the answer text and the full plan with metadata

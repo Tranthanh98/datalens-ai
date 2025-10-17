@@ -60,16 +60,19 @@ export class DataLensDatabase extends Dexie {
 
     this.databaseInfo.hook(
       "updating",
-      (modifications: Partial<DatabaseInfo>, primKey, obj, trans) => {
+      (modifications: Partial<DatabaseInfo>, primKey, obj, _trans) => {
         modifications.updatedAt = new Date();
       }
     );
 
-    this.conversations.hook("creating", (primKey, obj: Conversation, trans) => {
-      obj.createdAt = new Date();
-      obj.updatedAt = new Date();
-      if (!obj.messageCount) obj.messageCount = 0;
-    });
+    this.conversations.hook(
+      "creating",
+      (primKey, obj: Conversation, _trans) => {
+        obj.createdAt = new Date();
+        obj.updatedAt = new Date();
+        if (!obj.messageCount) obj.messageCount = 0;
+      }
+    );
 
     this.conversations.hook(
       "updating",

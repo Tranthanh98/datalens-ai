@@ -587,14 +587,40 @@ Create a JSON response with this structure:
    - DO NOT rename or translate tables
    - Use the exact spelling provided in the schema
 
-3. **EXAMPLES**:
-   ✅ CORRECT: SELECT Orders.Logins_LoginId, Orders.OrderDate FROM Orders
-   ❌ WRONG: SELECT Orders.loginId, Orders.orderDate FROM orders
+3. **ALWAYS USE LIMIT/TOP**: NEVER query all rows without limits
+   - Use proper syntax for ${databaseType}:
+     * SQL Server (mssql): SELECT TOP N ...
+     * PostgreSQL/MySQL: SELECT ... LIMIT N
+     * Oracle: SELECT ... FETCH FIRST N ROWS ONLY
+   - Default limits based on query type:
+     * Exploration queries: 100 rows
+     * Analysis queries: 500-1000 rows
+     * Aggregation queries: 1000-5000 rows
+     * COUNT queries: Can query all but filter with WHERE first
+   - ALWAYS include appropriate limit clause for the database type
    
-   ✅ CORRECT: SELECT user_id, created_at FROM user_sessions
-   ❌ WRONG: SELECT userId, createdAt FROM userSessions
+   ❌ WRONG: SELECT * FROM Orders (no limit - dangerous!)
+   ✅ CORRECT: Use appropriate syntax for ${databaseType}
 
-4. **QUERY RESTRICTIONS**:
+4. **USE SEMANTIC SEARCH PATTERNS**: Query by meaning, not exact match
+   - For status/error searches: Use LIKE with wildcards for broader context
+   - For text searches: Use pattern matching to capture variations
+   - For categorical data: Consider using IN with multiple related values
+   
+   Examples:
+   ✅ CORRECT: WHERE Status LIKE '%Error%' OR Status LIKE '%Failed%' OR Status LIKE '%Exception%'
+   ✅ CORRECT: WHERE StatusName IN ('Error', 'Failed', 'Timeout', 'Exception')
+   ✅ CORRECT: WHERE Description LIKE '%timeout%' OR Description LIKE '%failed%'
+   ❌ WRONG: WHERE Status = 'Error' (too narrow, might miss 'ERROR', 'Error-Network', etc.)
+   ❌ WRONG: WHERE Status = 'Failed' (misses 'FailedPayment', 'Failed-Validation', etc.)
+
+5. **SMART FILTERING STRATEGY**:
+   - First, explore with LIKE/IN to understand data patterns
+   - Then, if needed, narrow down with exact matches
+   - For initial queries: Use broad patterns to get context
+   - For follow-up queries: Use specific values found in initial results
+
+6. **QUERY RESTRICTIONS**:
    - ONLY generate SELECT statements
    - DO NOT use INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, or any data modification commands
    - This is a read-only system for data analysis and reporting only
@@ -604,15 +630,21 @@ Create a JSON response with this structure:
 Guidelines:
 - Break complex questions into logical steps
 - Each step should build on previous results
-- Use proper ${databaseType} SQL syntax
+- Use proper ${databaseType} SQL syntax and LIMIT/TOP syntax
 - **Copy column and table names EXACTLY as they appear in the schema** - do not modify them in any way
+- **ALWAYS include appropriate row limit clause** based on the database type (TOP for SQL Server, LIMIT for PostgreSQL/MySQL, etc.)
+- **Use semantic search patterns (LIKE, IN) instead of exact matches (=)** when exploring data
+- For status/error queries: Use LIKE '%Error%' OR LIKE '%Failed%' to capture all variations
+- For categorical filters: Use IN (...) with multiple related values to get broader context
+- Start with exploratory queries (limit 10~20 rows) to understand data patterns
+- Then use specific queries with larger limits (~1000 rows) for detailed analysis
 - For aggregations, ensure proper GROUP BY clauses with exact column names
 - Handle JOINs carefully based on schema relationships, using exact foreign key column names
 - Ensure all SQL queries are SELECT statements only
 - **Pay attention to conversation history** - if the question references previous context (userId, statusId, etc.), incorporate those values
 - Double-check that every column reference in your SQL matches the schema exactly
-
-Return only valid JSON.
+- When user asks about errors/problems or unclearly contextualized issues: Query broadly first (LIKE '%Error%', '%Failed%', '%Exception%') then narrow down
+- Prefer exploring data with flexible patterns over strict exact matches to provide richer contextReturn only valid JSON.
     `.trim();
   }
 
@@ -646,7 +678,18 @@ Based on the results so far, should any remaining steps be modified?
    - DO NOT change case (keep "Orders", not "orders")
    - Maintain exact spelling and format
 
-3. **QUERY RESTRICTIONS**:
+3. **ALWAYS USE LIMIT/TOP**: NEVER query all rows without limits
+   - MUST include TOP/LIMIT in every SELECT query
+   - Use appropriate limits based on query type (exploration: 20, analysis: 100)
+   - Examples: SELECT TOP 10 ... or SELECT ... LIMIT 10
+
+4. **USE SEMANTIC PATTERNS**: Prefer broad queries over narrow exact matches
+   - Use LIKE with wildcards for status/error searches
+   - Use IN with multiple values for categorical data
+   - Example: WHERE Status LIKE '%Error%' OR Status LIKE '%Failed%'
+   - NOT: WHERE Status = 'Error'
+
+5. **QUERY RESTRICTIONS**:
    - ONLY generate SELECT statements
    - DO NOT use INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, or any data modification commands
    - This is a read-only system for data analysis and reporting only

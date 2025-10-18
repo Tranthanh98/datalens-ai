@@ -199,60 +199,117 @@ const ManageDatabase = () => {
         return;
       }
 
-      const cleanResult = await cleanAndEnrichSchema(result.schema, dbType);
-
+      // Clear existing schema data
       await SchemaService.clearForDatabase(parseInt(id));
 
-      // Save the complete schema as a single JSON object
-      await SchemaService.save({
-        databaseId: parseInt(id),
-        schema: cleanResult.cleanedSchema, // Store the entire schema array as JSON
+      // Group schema by table_schema to reduce AI token usage
+      interface RawTableSchema {
+        table_schema?: string;
+        [key: string]: unknown;
+      }
+
+      const schemaGroups = new Map<string, RawTableSchema[]>();
+
+      result.schema.forEach((table: RawTableSchema) => {
+        const tableSchema = table.table_schema || "default";
+        if (!schemaGroups.has(tableSchema)) {
+          schemaGroups.set(tableSchema, []);
+        }
+        schemaGroups.get(tableSchema)!.push(table);
       });
 
-      // Save schema to database - split into chunks to avoid large payloads
-      const schema = cleanResult.cleanedSchema || [];
-      const CHUNK_SIZE = 10; // Save 10 tables at a time
+      console.log(
+        `Grouped schema into ${schemaGroups.size} schema groups:`,
+        Array.from(schemaGroups.keys()).map(
+          (key) => `${key} (${schemaGroups.get(key)?.length} tables)`
+        )
+      );
 
-      if (schema.length === 0) {
+      // Clean and save each schema group separately
+      interface CleanedTable {
+        tableName: string;
+        tableDescription: string;
+        isRelevant: boolean;
+        category: string;
+        columns: unknown[];
+        [key: string]: unknown;
+      }
+
+      const allCleanedTables: CleanedTable[] = [];
+      const CHUNK_SIZE = 15; // Save 15 tables at a time
+
+      for (const [schemaName, tables] of schemaGroups) {
+        console.log(
+          `Processing schema group: ${schemaName} with ${tables.length} tables`
+        );
+
+        try {
+          // Clean schema for this group
+          const cleanResult = await cleanAndEnrichSchema(tables, dbType);
+
+          if (cleanResult.success && cleanResult.cleanedSchema) {
+            const cleanedTables = cleanResult.cleanedSchema;
+            console.log(
+              `Cleaned ${cleanedTables.length} tables from schema: ${schemaName}`
+            );
+
+            // Add to total for final summary
+            allCleanedTables.push(...cleanedTables);
+
+            // Immediately save cleaned tables to database in chunks
+            if (cleanedTables.length > 0) {
+              const chunks: CleanedTable[][] = [];
+              for (let i = 0; i < cleanedTables.length; i += CHUNK_SIZE) {
+                chunks.push(cleanedTables.slice(i, i + CHUNK_SIZE));
+              }
+
+              console.log(
+                `Saving ${cleanedTables.length} tables from schema ${schemaName} in ${chunks.length} chunks`
+              );
+
+              // Save each chunk sequentially
+              for (let i = 0; i < chunks.length; i++) {
+                console.log(
+                  `Saving chunk ${i + 1}/${chunks.length} with ${
+                    chunks[i].length
+                  } tables from schema: ${schemaName}`
+                );
+
+                await DatabaseSchemaService.saveSchemaToDatabase(
+                  parseInt(id),
+                  chunks[i]
+                );
+              }
+            }
+          } else {
+            console.warn(
+              `Failed to clean schema group ${schemaName}:`,
+              cleanResult.error
+            );
+          }
+        } catch (error) {
+          console.error(`Error cleaning schema group ${schemaName}:`, error);
+          // Continue with other groups
+        }
+      }
+
+      // Save the complete cleaned schema as a single JSON object for local storage
+      await SchemaService.save({
+        databaseId: parseInt(id),
+        schema: allCleanedTables, // Store the entire cleaned schema array as JSON
+      });
+
+      if (allCleanedTables.length === 0) {
         setMessage({
           type: "error",
-          text: "Schema rỗng, không có gì để lưu",
+          text: "Schema rỗng sau khi clean, không có gì để lưu",
         });
         return;
       }
 
-      // Split schema into chunks
-      const chunks: (typeof schema)[] = [];
-      for (let i = 0; i < schema.length; i += CHUNK_SIZE) {
-        chunks.push(schema.slice(i, i + CHUNK_SIZE));
-      }
-
-      console.log(
-        `Splitting schema into ${chunks.length} chunks of max ${CHUNK_SIZE} tables each`
-      );
-
-      // Save each chunk sequentially
-      for (let i = 0; i < chunks.length; i++) {
-        console.log(
-          `Saving chunk ${i + 1}/${chunks.length} with ${
-            chunks[i].length
-          } tables`
-        );
-
-        await DatabaseSchemaService.saveSchemaToDatabase(
-          parseInt(id),
-          chunks[i]
-        );
-
-        // Small delay between chunks to avoid overwhelming the server
-        if (i < chunks.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 100));
-        }
-      }
-
       setMessage({
         type: "success",
-        text: `Tải lại schema thành công! (${schema.length} tables, ${chunks.length} chunks)`,
+        text: `Tải lại schema thành công! (${allCleanedTables.length} tables từ ${schemaGroups.size} schema groups)`,
       });
     } catch (error) {
       setMessage({

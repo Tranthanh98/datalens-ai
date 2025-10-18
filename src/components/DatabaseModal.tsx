@@ -7,19 +7,6 @@ import DatabaseSchemaService, {
 import { useDatabaseStore } from "../store";
 import { parseConnectionString } from "../utils/connectionStringParser";
 
-interface DatabaseConnection {
-  id: string;
-  name: string;
-  type: DatabaseType;
-  connectionString?: string;
-  host?: string;
-  port?: number;
-  database?: string;
-  username?: string;
-  password?: string;
-  ssl?: boolean;
-}
-
 interface DatabaseModalProps {
   isOpen: boolean;
   onClose: () => void;

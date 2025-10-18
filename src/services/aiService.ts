@@ -293,9 +293,9 @@ export class AIService {
   /**
    * Refine query plan based on execution context and results
    */
-  static async refinePlan(plan: QueryPlan): Promise<QueryPlan> {
+  static async refinePlan(plan: QueryPlan, schema: any): Promise<QueryPlan> {
     try {
-      const prompt = this.buildRefinementPrompt(plan);
+      const prompt = this.buildRefinementPrompt(plan, schema);
       const result = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: prompt,
@@ -428,7 +428,7 @@ export class AIService {
 
             // Step 3: Refine plan based on current results
             if (plan.steps.indexOf(step) < plan.steps.length - 1) {
-              const refinedPlan = await this.refinePlan(plan);
+              const refinedPlan = await this.refinePlan(plan, schema);
               // Update remaining steps with refined plan
               Object.assign(plan, refinedPlan);
             }
@@ -593,9 +593,9 @@ Create a JSON response with this structure:
      * PostgreSQL/MySQL: SELECT ... LIMIT N
      * Oracle: SELECT ... FETCH FIRST N ROWS ONLY
    - Default limits based on query type:
-     * Exploration queries: 100 rows
-     * Analysis queries: 500-1000 rows
-     * Aggregation queries: 1000-5000 rows
+     * Exploration queries: 10 rows
+     * Analysis queries: 10-20 rows
+     * Aggregation queries: 10-20 rows
      * COUNT queries: Can query all but filter with WHERE first
    - ALWAYS include appropriate limit clause for the database type
    
@@ -637,7 +637,7 @@ Guidelines:
 - For status/error queries: Use LIKE '%Error%' OR LIKE '%Failed%' to capture all variations
 - For categorical filters: Use IN (...) with multiple related values to get broader context
 - Start with exploratory queries (limit 10~20 rows) to understand data patterns
-- Then use specific queries with larger limits (~1000 rows) for detailed analysis
+- Then use specific queries with larger limits (~50 rows) for detailed analysis
 - For aggregations, ensure proper GROUP BY clauses with exact column names
 - Handle JOINs carefully based on schema relationships, using exact foreign key column names
 - Ensure all SQL queries are SELECT statements only
@@ -651,7 +651,7 @@ Guidelines:
   /**
    * Build prompt for plan refinement
    */
-  private static buildRefinementPrompt(plan: QueryPlan): string {
+  private static buildRefinementPrompt(plan: QueryPlan, schema: any): string {
     const contextSummary = plan.context.map((ctx) => ({
       step: ctx.step.description,
       result_summary: ctx.result?.data
@@ -659,8 +659,33 @@ Guidelines:
         : "error",
     }));
 
+    // Extract default schema for database type
+    const getDefaultSchema = (dbType: string): string => {
+      switch (dbType.toLowerCase()) {
+        case "mssql":
+        case "sqlserver":
+          return "dbo";
+        case "postgresql":
+        case "postgres":
+          return "public";
+        case "mysql":
+          return "mysql";
+        case "oracle":
+          return "public";
+        default:
+          return "dbo";
+      }
+    };
+
+    const defaultSchema = getDefaultSchema(plan.databaseType);
+
     return `
 You are refining a multi-step query plan based on execution results.
+
+DATABASE TYPE: ${plan.databaseType}
+DEFAULT SCHEMA: ${defaultSchema}
+DATABASE SCHEMA:
+${JSON.stringify(schema, null, 2)}
 
 ORIGINAL QUESTION: "${plan.question}"
 CURRENT PLAN: ${JSON.stringify(plan.steps, null, 2)}
@@ -674,13 +699,27 @@ Based on the results so far, should any remaining steps be modified?
    - DO NOT convert naming conventions (keep "user_id", not "userId")
    - Copy column names EXACTLY as they appear in the database schema
 
-2. **TABLE NAMES**: Use EXACT table names from the schema
+2. **TABLE NAMES WITH SCHEMA**: ALWAYS include schema/category prefix for table names
+   - **MANDATORY**: Use format [schema].[tableName] or schema.tableName
+   - If table has a specific schema in the database, use that exact schema
+   - If no schema is specified, use the default schema: ${defaultSchema}
    - DO NOT change case (keep "Orders", not "orders")
    - Maintain exact spelling and format
+   
+   Examples for ${plan.databaseType}:
+   ✅ CORRECT: SELECT TOP 10 p.Id FROM ${defaultSchema}.Product p
+   ✅ CORRECT: SELECT TOP 10 p.Id FROM Production.Product p (if schema is Production)
+   ✅ CORRECT: SELECT * FROM ${defaultSchema}.Users u JOIN ${defaultSchema}.Orders o ON u.Id = o.UserId
+   ❌ WRONG: SELECT TOP 10 p.Id FROM Product p (missing schema)
+   ❌ WRONG: SELECT * FROM Users u JOIN Orders o (missing schema)
 
 3. **ALWAYS USE LIMIT/TOP**: NEVER query all rows without limits
    - MUST include TOP/LIMIT in every SELECT query
-   - Use appropriate limits based on query type (exploration: 20, analysis: 100)
+   - Use appropriate limits based on query type (exploration: 10-20, analysis: 10-20)
+   - Use proper syntax for ${plan.databaseType}:
+     * SQL Server (mssql): SELECT TOP N ...
+     * PostgreSQL/MySQL: SELECT ... LIMIT N
+     * Oracle: SELECT ... FETCH FIRST N ROWS ONLY
    - Examples: SELECT TOP 10 ... or SELECT ... LIMIT 10
 
 4. **USE SEMANTIC PATTERNS**: Prefer broad queries over narrow exact matches
@@ -696,19 +735,27 @@ Based on the results so far, should any remaining steps be modified?
    - All queries must be safe and non-destructive
    - Focus on data retrieval, filtering, aggregation, and analysis
 
+6. **SCHEMA USAGE EXAMPLES**:
+   For ${plan.databaseType} database:
+   - Single table: SELECT TOP 10 * FROM ${defaultSchema}.TableName
+   - With alias: SELECT TOP 10 u.* FROM ${defaultSchema}.Users u
+   - JOIN queries: SELECT u.Name, o.Total FROM ${defaultSchema}.Users u JOIN ${defaultSchema}.Orders o ON u.Id = o.UserId
+   - Specific schema: SELECT * FROM Production.Product (if table is in Production schema)
+   - Mixed schemas: SELECT u.*, p.Name FROM ${defaultSchema}.Users u JOIN Production.Product p ON u.ProductId = p.Id
+
 Return JSON with:
 {
   "shouldRefine": true/false,
   "reasoning": "explanation of refinement decision",
   "newSteps": [
-    // Any new steps needed (with SELECT queries only, using exact column/table names)
+    // Any new steps needed (with SELECT queries only, using exact column/table names with schema prefix)
   ],
   "modifiedSteps": [
-    // Modified existing steps (with SELECT queries only, using exact column/table names)
+    // Modified existing steps (with SELECT queries only, using exact column/table names with schema prefix)
   ]
 }
 
-Ensure all SQL queries use exact column and table names from the schema, and are SELECT statements only.
+**CRITICAL**: Ensure all SQL queries use exact column and table names from the schema, include schema prefix for all table names, and are SELECT statements only.
 
 Return only valid JSON.
     `.trim();

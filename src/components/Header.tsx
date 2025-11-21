@@ -1,5 +1,5 @@
 import { ChevronDown, Database, Plus, RotateCcw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { LegacyDatabase } from "../db/adapters";
 import { useDatabaseStore } from "../store";
@@ -7,7 +7,7 @@ import DatabaseModal from "./DatabaseModal";
 
 /**
  * Header component containing the DataLens AI logo, database dropdown, and add database button
- * Now uses Zustand store for internal state management instead of props
+ * Now uses API for database management instead of IndexedDB
  */
 const Header: React.FC = () => {
   const navigate = useNavigate();
@@ -17,15 +17,7 @@ const Header: React.FC = () => {
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
   // Zustand store hooks
-  const { databases, selectedDatabase, initializeDatabases, selectDatabase } =
-    useDatabaseStore();
-
-  /**
-   * Initialize databases on component mount
-   */
-  useEffect(() => {
-    initializeDatabases();
-  }, [initializeDatabases]);
+  const { databases, selectedDatabase, selectDatabase } = useDatabaseStore();
 
   /**
    * Handle opening the database modal

@@ -6,6 +6,6 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
-    outDir: "../dist", // build ra ngoài để Express có thể serve
+    outDir: "dist", // build ra ngoài để Express có thể serve
   },
 });

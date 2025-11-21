@@ -6,16 +6,6 @@ import { runMigrationsFromEnv } from "./db/migrations";
 import { SchemaService } from "./services/schemaService";
 import { DatabaseConnectionInfo } from "./utils/schemaQueries";
 
-// Load environment variables
-dotenv.config();
-
-const app: Express = express();
-const PORT = process.env.PORT || 3001;
-
-// Middleware
-app.use(cors());
-app.use(express.json());
-
 import { databaseInfoRepository } from "./repositories/databaseInfoRepository";
 import { schemaInfoRepository } from "./repositories/schemaInfoRepository";
 import { embeddingService } from "./services/embeddingService";
@@ -39,6 +29,15 @@ export interface DatabaseConnection {
   ssl?: boolean;
 }
 
+// Load environment variables
+dotenv.config();
+
+const app: Express = express();
+const PORT = process.env.PORT || 3001;
+
+// Middleware
+app.use(cors());
+app.use(express.json());
 /**
  * Test database connection endpoint
  */

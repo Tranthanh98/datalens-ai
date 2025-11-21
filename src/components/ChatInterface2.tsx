@@ -5,9 +5,9 @@ import {
   MessageService,
   QueryResultService,
 } from "../db/services";
-import { runAIQuery } from "../services/aiService";
 import { QueryExecutionApiService } from "../services/queryExecutionApiService";
-import { useChatStore, useDatabaseStore } from "../store";
+import { SimpleAIServiceFactory } from "../services/simpleAiServiceFactory";
+import { useAISettingsStore, useChatStore, useDatabaseStore } from "../store";
 import type { QueryPlanEvent, QueryPlanStep } from "../utils/queryPlanEvents";
 import { queryPlanEvents } from "../utils/queryPlanEvents";
 import ChatHeader from "./ChatHeader";
@@ -74,6 +74,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
 
   // Get selected database from store
   const { selectedDatabase } = useDatabaseStore();
+
+  // Get selected AI provider from store
+  const { selectedProvider } = useAISettingsStore();
 
   // Subscribe to query plan events
   useEffect(() => {
@@ -261,14 +264,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
               }
             }
 
-            // Execute AI query with conversation context
-            const { answer: aiResponse, plan } = await runAIQuery(
-              message,
-              parseInt(selectedDatabase.id),
-              selectedDatabase.type || "postgresql",
-              executeSQL,
-              conversationHistory
-            );
+            // Execute AI query with conversation context using selected provider
+            const { answer: aiResponse, plan } =
+              await SimpleAIServiceFactory.executeQuery(
+                selectedProvider,
+                message,
+                parseInt(selectedDatabase.id),
+                selectedDatabase.type || "postgresql",
+                executeSQL,
+                conversationHistory
+              );
 
             // Update the AI message with the real response
             await MessageService.update(aiMessageId, {
@@ -320,7 +325,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
         setIsLoading(false);
       }
     },
-    [selectedConversationId, selectedDatabase]
+    [selectedConversationId, selectedDatabase, selectedProvider]
   );
 
   return (

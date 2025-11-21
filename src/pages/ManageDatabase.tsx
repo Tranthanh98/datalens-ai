@@ -2,7 +2,7 @@ import { ArrowLeft, Database, Edit, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { SchemaService } from "../db";
-import { cleanAndEnrichSchema } from "../services/aiService";
+import { cleanAndEnrichSchema } from "../services/aiService2";
 import DatabaseApiService, {
   type DatabaseInfo,
 } from "../services/databaseApiService";

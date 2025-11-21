@@ -1,15 +1,7 @@
 import { type StateCreator } from "zustand";
-import {
-  ConversationService,
-  DatabaseService,
-  MessageService,
-  QueryResultService,
-} from "../db";
+import { ConversationService, MessageService, QueryResultService } from "../db";
 import {
   conversationArrayToLegacy,
-  databaseArrayToLegacy,
-  databaseInfoToLegacy,
-  legacyToDatabase,
   messageArrayToLegacy,
   queryResultArrayToLegacy,
   type LegacyConversation,
@@ -17,6 +9,10 @@ import {
   type LegacyMessage,
   type LegacyQueryResult,
 } from "../db/adapters";
+import {
+  DatabaseApiService,
+  type DatabaseInfo,
+} from "../services/databaseApiService";
 
 export interface DatabaseSlice {
   // State
@@ -26,7 +22,7 @@ export interface DatabaseSlice {
   error: string | null;
 
   // Actions
-  initializeDatabases: () => Promise<void>;
+  loadDatabases: () => Promise<void>;
   selectDatabase: (database: LegacyDatabase) => Promise<{
     conversations: LegacyConversation[];
     messages: LegacyMessage[];
@@ -39,8 +35,24 @@ export interface DatabaseSlice {
 }
 
 /**
+ * Convert DatabaseInfo to LegacyDatabase
+ */
+const databaseInfoToLegacy = (db: DatabaseInfo): LegacyDatabase => ({
+  id: db.id.toString(),
+  name: db.name,
+  type: db.type,
+  host: db.host,
+  port: db.port,
+  database: db.database,
+  username: db.username,
+  password: db.password,
+  connectionString: db.connectionString,
+  ssl: db.ssl,
+});
+
+/**
  * Create database slice for Zustand store
- * Handles database selection, loading, and CRUD operations
+ * Handles database selection, loading, and CRUD operations using API
  */
 export const createDatabaseSlice: StateCreator<
   DatabaseSlice,
@@ -55,24 +67,28 @@ export const createDatabaseSlice: StateCreator<
   error: null,
 
   /**
-   * Initialize databases from IndexedDB on app startup
+   * Load databases from API and select active one
    */
-  initializeDatabases: async () => {
+  loadDatabases: async () => {
     set({ isLoading: true, error: null });
 
     try {
-      // Load databases
-      const dbList = await DatabaseService.getAll();
-      const legacyDatabases = databaseArrayToLegacy(dbList);
+      // Load databases from API
+      const dbList = await DatabaseApiService.getAllDatabases();
+      const legacyDatabases = dbList.map(databaseInfoToLegacy);
 
-      // Set active database if available
-      const activeDb = await DatabaseService.getActive();
+      // Find active databases
+      const activeDatabases = dbList.filter((db) => db.isActive);
       let selectedDb = null;
 
-      if (activeDb) {
-        selectedDb = databaseInfoToLegacy(activeDb);
+      if (activeDatabases.length === 1) {
+        // Single active database - select it
+        selectedDb = databaseInfoToLegacy(activeDatabases[0]);
+      } else if (activeDatabases.length >= 2) {
+        // Multiple active databases - select first one
+        selectedDb = databaseInfoToLegacy(activeDatabases[0]);
       } else if (dbList.length > 0) {
-        // If no active database, use first available
+        // No active database - select first available
         selectedDb = databaseInfoToLegacy(dbList[0]);
       }
 
@@ -82,7 +98,7 @@ export const createDatabaseSlice: StateCreator<
         isLoading: false,
       });
     } catch (error) {
-      console.error("Failed to initialize databases:", error);
+      console.error("Failed to load databases:", error);
       set({
         error: "Failed to load databases",
         isLoading: false,
@@ -98,19 +114,13 @@ export const createDatabaseSlice: StateCreator<
 
     try {
       const dbId = parseInt(database.id);
-      const { selectedDatabase } = get();
 
-      // Update active database
-      if (selectedDatabase) {
-        await DatabaseService.update(parseInt(selectedDatabase.id), {
-          isActive: false,
-        });
-      }
-      await DatabaseService.update(dbId, { isActive: true });
+      // Activate the selected database via API
+      await DatabaseApiService.activateDatabase(dbId);
 
       set({ selectedDatabase: database });
 
-      // Load conversations for selected database
+      // Load conversations for selected database (from IndexedDB)
       const convList = await ConversationService.getByDatabase(dbId);
       const conversations = conversationArrayToLegacy(convList);
 
@@ -147,30 +157,37 @@ export const createDatabaseSlice: StateCreator<
   },
 
   /**
-   * Add a new database
+   * Add a new database via API
    */
   addDatabase: async (database: LegacyDatabase): Promise<number> => {
     set({ isLoading: true, error: null });
 
     try {
-      const dbData = legacyToDatabase(database);
-      const dbId = await DatabaseService.add({
-        ...dbData,
+      // Convert legacy to API format
+      const dbData = {
+        name: database.name,
+        type: database.type || ("postgresql" as const),
+        host: database.host,
+        port: database.port,
+        database: database.database,
+        username: database.username,
+        password: database.password,
+        connectionString: database.connectionString,
+        ssl: database.ssl,
         isActive: true,
+      };
+
+      const newDb = await DatabaseApiService.createDatabase(dbData);
+      const legacyDb = databaseInfoToLegacy(newDb);
+      const { databases } = get();
+
+      set({
+        databases: [...databases, legacyDb],
+        selectedDatabase: legacyDb,
+        isLoading: false,
       });
 
-      const newDb = await DatabaseService.getById(dbId);
-      if (newDb) {
-        const legacyDb = databaseInfoToLegacy(newDb);
-        const { databases } = get();
-
-        set({
-          databases: [...databases, legacyDb],
-          selectedDatabase: legacyDb,
-          isLoading: false,
-        });
-      }
-      return dbId;
+      return newDb.id;
     } catch (error) {
       console.error("Failed to add database:", error);
       set({

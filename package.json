@@ -17,6 +17,7 @@
     "dexie": "^4.0.10",
     "dexie-react-hooks": "^4.2.0",
     "lucide-react": "^0.468.0",
+    "openai": "^6.7.0",
     "prism-react-renderer": "^2.4.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

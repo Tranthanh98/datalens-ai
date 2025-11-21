@@ -1,10 +1,11 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
+import { createAISettingsSlice, type AISettingsSlice } from "./aiSettingsSlice";
 import { createChatSlice, type ChatSlice } from "./chatSlice";
 import { createDatabaseSlice, type DatabaseSlice } from "./databaseSlice";
 
 // Combined store interface
-export interface AppStore extends DatabaseSlice, ChatSlice {}
+export interface AppStore extends DatabaseSlice, ChatSlice, AISettingsSlice {}
 
 // Create the combined store
 export const useAppStore = create<AppStore>()(
@@ -12,6 +13,7 @@ export const useAppStore = create<AppStore>()(
     (...a) => ({
       ...createDatabaseSlice(...a),
       ...createChatSlice(...a),
+      ...createAISettingsSlice(...a),
     }),
     {
       name: "datalens-store",
@@ -25,7 +27,7 @@ export const useDatabaseStore = () => {
   const selectedDatabase = useAppStore((state) => state.selectedDatabase);
   const isLoading = useAppStore((state) => state.isLoading);
   const error = useAppStore((state) => state.error);
-  const initializeDatabases = useAppStore((state) => state.initializeDatabases);
+  const loadDatabases = useAppStore((state) => state.loadDatabases);
   const addDatabase = useAppStore((state) => state.addDatabase);
   const selectDatabase = useAppStore((state) => state.selectDatabase);
   const setError = useAppStore((state) => state.setError);
@@ -36,7 +38,7 @@ export const useDatabaseStore = () => {
     selectedDatabase,
     isLoading,
     error,
-    initializeDatabases,
+    loadDatabases,
     addDatabase,
     selectDatabase,
     setError,
@@ -61,5 +63,15 @@ export const useChatStore = () => {
     setSelectedConversationId,
     selectedMessageId,
     setSelectedMessageId,
+  };
+};
+
+export const useAISettingsStore = () => {
+  const selectedProvider = useAppStore((state) => state.selectedProvider);
+  const setSelectedProvider = useAppStore((state) => state.setSelectedProvider);
+
+  return {
+    selectedProvider,
+    setSelectedProvider,
   };
 };

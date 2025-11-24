@@ -334,12 +334,10 @@ export class DatabaseService {
   ): Promise<QueryResult> {
     try {
       // Security: Only allow SELECT statements
-      const trimmedQuery = query.trim().toUpperCase();
-      if (
-        trimmedQuery.includes("UPDATE") ||
-        trimmedQuery.includes("DELETE") ||
-        trimmedQuery.includes("INSERT")
-      ) {
+      const trimmedQuery = query.trim().toLowerCase();
+      const forbidden = /(insert|update|delete|drop|alter|exec|create)\s/i;
+
+      if (forbidden.test(trimmedQuery)) {
         return {
           success: false,
           error: "Only SELECT queries are allowed for security reasons",

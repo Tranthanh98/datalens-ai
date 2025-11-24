@@ -3,12 +3,12 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { SchemaService } from "../db";
 import { cleanAndEnrichSchema } from "../services/aiService2";
-import DatabaseApiService, {
+import {
+  default as DatabaseApiService,
+  default as DatabaseSchemaService,
+  type DatabaseConnection,
   type DatabaseInfo,
 } from "../services/databaseApiService";
-import DatabaseSchemaService, {
-  type DatabaseConnection,
-} from "../services/databaseService";
 
 interface DatabaseFormData {
   name: string;

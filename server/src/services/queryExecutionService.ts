@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import sql from "mssql";
 import mysql from "mysql2/promise";
 import { Pool } from "pg";
@@ -27,22 +28,24 @@ export class QueryExecutionService {
       });
 
       client = await pool.connect();
-      
+
       // Validate that the query is a SELECT statement
       const trimmedQuery = query.trim().toLowerCase();
-      if (!trimmedQuery.startsWith('select')) {
-        throw new Error('Only SELECT queries are allowed for security reasons');
+      const forbidden = /(insert|update|delete|drop|alter|exec|create)\s/i;
+
+      if (forbidden.test(trimmedQuery)) {
+        throw new Error("Dangerous SQL keywords detected");
       }
 
       const result = await client.query(query);
-      
+
       return {
         rows: result.rows,
         rowCount: result.rowCount,
-        fields: result.fields?.map(field => ({
+        fields: result.fields?.map((field) => ({
           name: field.name,
-          dataTypeID: field.dataTypeID
-        }))
+          dataTypeID: field.dataTypeID,
+        })),
       };
     } catch (error) {
       console.error("PostgreSQL query execution error:", error);
@@ -74,21 +77,25 @@ export class QueryExecutionService {
 
       // Validate that the query is a SELECT statement
       const trimmedQuery = query.trim().toLowerCase();
-      if (!trimmedQuery.startsWith('select')) {
-        throw new Error('Only SELECT queries are allowed for security reasons');
+      const forbidden = /(insert|update|delete|drop|alter|exec|create)\s/i;
+
+      if (forbidden.test(trimmedQuery)) {
+        throw new Error("Dangerous SQL keywords detected");
       }
 
       const [rows, fields] = await connection.execute(query);
 
       await connection.end();
-      
+
       return {
         rows: rows,
         rowCount: Array.isArray(rows) ? rows.length : 0,
-        fields: Array.isArray(fields) ? fields.map((field: any) => ({
-          name: field.name,
-          type: field.type
-        })) : []
+        fields: Array.isArray(fields)
+          ? fields.map((field: any) => ({
+              name: field.name,
+              type: field.type,
+            }))
+          : [],
       };
     } catch (error) {
       console.error("MySQL query execution error:", error);
@@ -119,14 +126,16 @@ export class QueryExecutionService {
       },
       connectionTimeout: 10000,
     });
-    
+
     try {
       await pool.connect();
-      
+
       // Validate that the query is a SELECT statement
       const trimmedQuery = query.trim().toLowerCase();
-      if (!trimmedQuery.startsWith('select')) {
-        throw new Error('Only SELECT queries are allowed for security reasons');
+      const forbidden = /(insert|update|delete|drop|alter|exec|create)\s/i;
+
+      if (forbidden.test(trimmedQuery)) {
+        throw new Error("Dangerous SQL keywords detected");
       }
 
       const result = await pool.request().query(query);
@@ -136,10 +145,12 @@ export class QueryExecutionService {
       return {
         rows: result.recordset,
         rowCount: result.recordset.length,
-        fields: result.recordset.columns ? Object.keys(result.recordset.columns).map(key => ({
-          name: key,
-          type: result.recordset.columns[key].type
-        })) : []
+        fields: result.recordset.columns
+          ? Object.keys(result.recordset.columns).map((key) => ({
+              name: key,
+              type: result.recordset.columns[key].type,
+            }))
+          : [],
       };
     } catch (error) {
       console.error("SQL Server query execution error:", error);
@@ -160,8 +171,10 @@ export class QueryExecutionService {
   ): Promise<any> {
     // Additional security check at service level
     const trimmedQuery = query.trim().toLowerCase();
-    if (!trimmedQuery.startsWith('select')) {
-      throw new Error('Only SELECT queries are allowed for security reasons');
+    const forbidden = /(insert|update|delete|drop|alter|exec|create)\s/i;
+
+    if (forbidden.test(trimmedQuery)) {
+      throw new Error("Dangerous SQL keywords detected");
     }
 
     switch (connectionInfo.type) {

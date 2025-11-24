@@ -5,9 +5,9 @@ import {
   MessageService,
   QueryResultService,
 } from "../db/services";
+import { runAIQuery } from "../services/aiService2"; // Function calling agent
 import { QueryExecutionApiService } from "../services/queryExecutionApiService";
-import { SimpleAIServiceFactory } from "../services/simpleAiServiceFactory";
-import { useAISettingsStore, useChatStore, useDatabaseStore } from "../store";
+import { useChatStore, useDatabaseStore } from "../store";
 import type { QueryPlanEvent, QueryPlanStep } from "../utils/queryPlanEvents";
 import { queryPlanEvents } from "../utils/queryPlanEvents";
 import ChatHeader from "./ChatHeader";
@@ -75,8 +75,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
   // Get selected database from store
   const { selectedDatabase } = useDatabaseStore();
 
-  // Get selected AI provider from store
-  const { selectedProvider } = useAISettingsStore();
+  // NOTE: selectedProvider from useAISettingsStore() not used with aiService3
+  // aiService3 uses Gemini with function calling only
 
   // Subscribe to query plan events
   useEffect(() => {
@@ -264,16 +264,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
               }
             }
 
-            // Execute AI query with conversation context using selected provider
-            const { answer: aiResponse, plan } =
-              await SimpleAIServiceFactory.executeQuery(
-                selectedProvider,
-                message,
-                parseInt(selectedDatabase.id),
-                selectedDatabase.type || "postgresql",
-                executeSQL,
-                conversationHistory
-              );
+            // Execute AI query with conversation context using new function calling agent
+            const { answer: aiResponse, plan } = await runAIQuery(
+              message,
+              parseInt(selectedDatabase.id),
+              selectedDatabase.type || "postgresql",
+              executeSQL,
+              conversationHistory
+            );
 
             // Update the AI message with the real response
             await MessageService.update(aiMessageId, {
@@ -281,20 +279,20 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
             });
 
             // Save query result to QueryResult table
-            if (plan.finalSQL) {
-              const lastContext = plan.context[plan.context.length - 1];
+            if (plan.finalSQL && plan.queries && plan.queries.length > 0) {
+              const lastQuery = plan.queries[plan.queries.length - 1];
               await QueryResultService.save({
                 conversationId: convId,
                 messageId: aiMessageId,
                 sqlQuery: plan.finalSQL,
                 result: {
-                  data: lastContext?.result || [],
+                  data: lastQuery?.result?.data || [],
                   columns:
-                    lastContext?.result && lastContext.result.length > 0
-                      ? Object.keys(lastContext.result[0])
+                    lastQuery?.result?.data && lastQuery.result.data.length > 0
+                      ? Object.keys(lastQuery.result.data[0])
                       : [],
-                  rowCount: lastContext?.result?.length || 0,
-                  executionTime: 0, // TODO: Track execution time
+                  rowCount: lastQuery?.rowCount || 0,
+                  executionTime: lastQuery?.executionTime || 0,
                 },
                 chartData: plan.chartData,
                 status: "success",
@@ -325,7 +323,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onNewConversation }) => {
         setIsLoading(false);
       }
     },
-    [selectedConversationId, selectedDatabase, selectedProvider]
+    [selectedConversationId, selectedDatabase]
   );
 
   return (

@@ -4,10 +4,14 @@
  */
 
 import type { ConversationContext } from "../utils/aiPrompt";
-import type { QueryPlan } from "./openAiService";
+import type { QueryPlan as GeminiQueryPlan } from "./aiService2";
+import type { QueryPlan as OpenAIQueryPlan } from "./openAiService";
 
 // Service provider types
 export type AIProvider = "openai" | "gemini" | "lmstudio";
+
+// Unified QueryPlan type
+export type QueryPlan = GeminiQueryPlan | OpenAIQueryPlan;
 
 // Database execution result type
 export interface DatabaseExecutionResult {

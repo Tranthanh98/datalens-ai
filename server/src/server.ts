@@ -197,11 +197,10 @@ app.post("/api/execute-sql", async (req, res) => {
 
     // Additional security check - only allow SELECT queries
     const trimmedQuery = query.trim().toLowerCase();
-    if (!trimmedQuery.startsWith("select")) {
-      return res.status(400).json({
-        success: false,
-        error: "Only SELECT queries are allowed for security reasons",
-      });
+    const forbidden = /(insert|update|delete|drop|alter|exec|create)\s/i;
+
+    if (forbidden.test(trimmedQuery)) {
+      throw new Error("Dangerous SQL keywords detected");
     }
 
     // Execute the query

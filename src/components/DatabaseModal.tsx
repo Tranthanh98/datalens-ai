@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import DatabaseSchemaService, {
   type DatabaseType,
   type DatabaseConnection as SchemaConnection,
-} from "../services/databaseService";
+} from "../services/databaseApiService";
 import { useDatabaseStore } from "../store";
 import { parseConnectionString } from "../utils/connectionStringParser";
 

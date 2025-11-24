@@ -4,10 +4,14 @@
  */
 
 import type { ConversationContext } from "../utils/aiPrompt";
-import type { QueryPlan } from "./openAiService";
+import type { QueryPlan as GeminiQueryPlan } from "./aiService2";
+import type { QueryPlan as OpenAIQueryPlan } from "./openAiService";
 
 // Service configuration types
 export type AIProvider = "openai" | "gemini";
+
+// Unified QueryPlan type that supports both services
+export type QueryPlan = GeminiQueryPlan | OpenAIQueryPlan;
 
 // Service configuration interface
 export interface AIServiceConfig {

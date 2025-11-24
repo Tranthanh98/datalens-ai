@@ -1,0 +1,61 @@
+version: "3.8"
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: datalens-sqlserver
+    hostname: sqlserver
+    ports:
+      - "1433:1433"
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=YourStrong@Passw0rd
+      - MSSQL_PID=Developer
+      - MSSQL_AGENT_ENABLED=true
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+      - ./database/backups:/var/opt/mssql/backup
+      - ./database/restore:/var/opt/mssql/restore
+    networks:
+      - datalens-network
+    restart: unless-stopped
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong@Passw0rd -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: datalens-postgres
+    hostname: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=datalens
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/postgres-init:/docker-entrypoint-initdb.d
+    networks:
+      - datalens-network
+    restart: unless-stopped
+    healthcheck:
+      test: pg_isready -U postgres || exit 1
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  sqlserver_data:
+    driver: local
+  postgres_data:
+    driver: local
+
+networks:
+  datalens-network:
+    driver: bridge

@@ -40,17 +40,8 @@ const ResultsPanel: React.FC<ResultsPanelProps> = () => {
   const sqlQuery = queryResult?.sqlQuery;
   const resultData = queryResult?.result;
 
-  // Sample data for demonstration when no message selected
-  const sampleData = [
-    { name: "Jan", value: 400 },
-    { name: "Feb", value: 300 },
-    { name: "Mar", value: 600 },
-    { name: "Apr", value: 800 },
-    { name: "May", value: 500 },
-  ];
-
-  const currentData = chartData?.data || sampleData;
-  const chartType = chartData?.type || "bar";
+  const currentData = chartData?.data || [];
+  const chartType = chartData?.type || "none";
 
   // Colors for pie chart
   const COLORS = [
@@ -61,6 +52,65 @@ const ResultsPanel: React.FC<ResultsPanelProps> = () => {
     "#8884D8",
     "#82CA9D",
   ];
+
+  const drawChart = () => {
+    if (chartType === "bar") {
+      return (
+        <BarChart data={currentData}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey={chartData?.xAxisKey || "name"} />
+          <YAxis />
+          <Tooltip />
+          <Legend />
+          <Bar dataKey={chartData?.yAxisKey || "value"} fill="#3B82F6" />
+        </BarChart>
+      );
+    }
+    if (chartType === "pie") {
+      return (
+        <PieChart>
+          <Pie
+            data={currentData}
+            cx="50%"
+            cy="50%"
+            labelLine={false}
+            label={({ name, percent }) =>
+              `${name}: ${(percent * 100).toFixed(0)}%`
+            }
+            outerRadius={100}
+            fill="#8884d8"
+            dataKey={chartData?.yAxisKey || "value"}
+          >
+            {currentData.map((_entry, index) => (
+              <Cell
+                key={`cell-${index}`}
+                fill={COLORS[index % COLORS.length]}
+              />
+            ))}
+          </Pie>
+          <Tooltip />
+          <Legend />
+        </PieChart>
+      );
+    }
+    if (chartType === "line") {
+      return (
+        <BarChart data={currentData}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey={chartData?.xAxisKey || "name"} />
+          <YAxis />
+          <Tooltip />
+          <Bar dataKey={chartData?.yAxisKey || "value"} fill="#3B82F6" />
+        </BarChart>
+      );
+    }
+
+    return (
+      <div className="text-center text-gray-500 p-8 bg-gray-50 rounded-lg">
+        <p>No visualization available for this query result</p>
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col h-full bg-white">
@@ -97,54 +147,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = () => {
             ) : (
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%">
-                  {chartType === "bar" ? (
-                    <BarChart data={currentData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey={chartData?.xAxisKey || "name"} />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar
-                        dataKey={chartData?.yAxisKey || "value"}
-                        fill="#3B82F6"
-                      />
-                    </BarChart>
-                  ) : chartType === "pie" ? (
-                    <PieChart>
-                      <Pie
-                        data={currentData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) =>
-                          `${name}: ${(percent * 100).toFixed(0)}%`
-                        }
-                        outerRadius={100}
-                        fill="#8884d8"
-                        dataKey={chartData?.yAxisKey || "value"}
-                      >
-                        {currentData.map((_entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={COLORS[index % COLORS.length]}
-                          />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  ) : (
-                    <BarChart data={currentData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey={chartData?.xAxisKey || "name"} />
-                      <YAxis />
-                      <Tooltip />
-                      <Bar
-                        dataKey={chartData?.yAxisKey || "value"}
-                        fill="#3B82F6"
-                      />
-                    </BarChart>
-                  )}
+                  {drawChart()}
                 </ResponsiveContainer>
               </div>
             )}

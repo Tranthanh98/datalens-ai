@@ -84,125 +84,94 @@ export interface QueryPlan {
 //  * Schema cleaning and enrichment response schema
 //  */
 const SCHEMA_CLEANING_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    cleanedSchema: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          tableName: {
-            type: Type.STRING,
-            description: "Name of the table",
-          },
-          tableDescription: {
-            type: Type.STRING,
-            description:
-              "Clear description of table's purpose and business context",
-          },
-          isRelevant: {
-            type: Type.BOOLEAN,
-            description: "Whether this table is relevant for business queries",
-          },
-          category: {
-            type: Type.STRING,
-            description:
-              "Business category (e.g., 'Sales', 'Users', 'Products', 'Analytics', 'System')",
-          },
-          columns: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                columnName: {
-                  type: Type.STRING,
-                  description: "Column name",
-                },
-                dataType: {
-                  type: Type.STRING,
-                  description: "SQL data type",
-                },
-                isPrimaryKey: {
-                  type: Type.BOOLEAN,
-                  description: "Whether column is a primary key",
-                },
-                isForeignKey: {
-                  type: Type.BOOLEAN,
-                  description: "Whether column is a foreign key",
-                },
-                referencedTable: {
-                  type: Type.STRING,
-                  description: "Referenced table if foreign key",
-                },
-                isNullable: {
-                  type: Type.BOOLEAN,
-                  description: "Whether column allows NULL",
-                },
-                description: {
-                  type: Type.STRING,
-                  description:
-                    "Clear, business-friendly description of the column",
-                },
-                isRelevant: {
-                  type: Type.BOOLEAN,
-                  description: "Whether this column is useful for queries",
-                },
-              },
-              required: ["columnName", "dataType", "description", "isRelevant"],
+  type: Type.ARRAY,
+  items: {
+    type: Type.OBJECT,
+    properties: {
+      tableName: {
+        type: Type.STRING,
+        description: "Name of the table",
+      },
+      tableDescription: {
+        type: Type.STRING,
+        description:
+          "Clear description of table's purpose and business context",
+      },
+      isRelevant: {
+        type: Type.BOOLEAN,
+        description: "Whether this table is relevant for business queries",
+      },
+      category: {
+        type: Type.STRING,
+        description:
+          "Business category (e.g., 'Sales', 'Users', 'Products', 'Analytics', 'System')",
+      },
+      columns: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            columnName: {
+              type: Type.STRING,
+              description: "Column name",
+            },
+            dataType: {
+              type: Type.STRING,
+              description: "SQL data type",
+            },
+            isPrimaryKey: {
+              type: Type.BOOLEAN,
+              description: "Whether column is a primary key",
+            },
+            isForeignKey: {
+              type: Type.BOOLEAN,
+              description: "Whether column is a foreign key",
+            },
+            referencedTable: {
+              type: Type.STRING,
+              description: "Referenced table if foreign key",
+            },
+            isNullable: {
+              type: Type.BOOLEAN,
+              description: "Whether column allows NULL",
+            },
+            description: {
+              type: Type.STRING,
+              description: "Clear, business-friendly description of the column",
+            },
+            isRelevant: {
+              type: Type.BOOLEAN,
+              description: "Whether this column is useful for queries",
             },
           },
-          primaryKey: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING },
-            description: "Primary key column names",
+          required: ["columnName", "dataType", "description", "isRelevant"],
+        },
+      },
+      primaryKey: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+        description: "Primary key column names",
+      },
+      foreignKeys: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            columnName: { type: Type.STRING },
+            referencedTable: { type: Type.STRING },
+            referencedColumn: { type: Type.STRING },
           },
-          foreignKeys: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                columnName: { type: Type.STRING },
-                referencedTable: { type: Type.STRING },
-                referencedColumn: { type: Type.STRING },
-              },
-            },
-          },
-        },
-        required: [
-          "tableName",
-          "tableDescription",
-          "isRelevant",
-          "category",
-          "columns",
-        ],
-      },
-    },
-    removedTables: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          tableName: { type: Type.STRING },
-          reason: { type: Type.STRING },
         },
       },
-      description: "List of tables removed and why",
     },
-    summary: {
-      type: Type.OBJECT,
-      properties: {
-        totalTables: { type: Type.NUMBER },
-        relevantTables: { type: Type.NUMBER },
-        removedTables: { type: Type.NUMBER },
-        categories: {
-          type: Type.ARRAY,
-          items: { type: Type.STRING },
-        },
-      },
-      description: "Summary statistics",
-    },
+    required: [
+      "tableName",
+      "tableDescription",
+      "isRelevant",
+      "category",
+      "columns",
+    ],
   },
-  required: ["cleanedSchema", "removedTables", "summary"],
 };
 
 /**
@@ -283,71 +252,88 @@ export class AIService {
         iteration++;
 
         // Check if agent wants to call function
-        const functionCall = agentResponse.functionCalls?.[0];
+        const functionCalls = agentResponse.functionCalls;
 
-        if (!functionCall) {
+        if (!functionCalls || functionCalls.length === 0) {
           // No function call - agent has final answer
           finalText = agentResponse.text || "";
           break;
         }
 
-        console.log(`🔄 Iteration ${iteration}: ${functionCall.name}`);
+        console.log(
+          `🔄 Iteration ${iteration}: Processing ${functionCalls.length} function calls`
+        );
 
-        if (functionCall.name === "execute_sql") {
-          // Execute SQL
-          const sql = functionCall.args.sql as string;
-          const purpose = functionCall.args.purpose as string;
+        // Add model's function calls to history
+        conversationMessages.push({
+          role: "model",
+          parts: functionCalls.map((fc) => ({ functionCall: fc })),
+        });
 
-          const queryExecution = await this.executeSQLWithRetry(
-            sql,
-            purpose,
-            executeSQL,
-            databaseType
-          );
+        // Execute all function calls in parallel
+        const executionPromises = functionCalls.map(async (call) => {
+          if (call.name === "execute_sql") {
+            const sql = call.args.sql as string;
+            const purpose = call.args.purpose as string;
 
-          queries.push(queryExecution);
+            const queryExecution = await this.executeSQLWithRetry(
+              sql,
+              purpose,
+              executeSQL,
+              databaseType
+            );
 
-          // Continue conversation with query result
-          conversationMessages.push({
-            role: "model",
-            parts: [{ functionCall }],
-          });
-
-          conversationMessages.push({
-            role: "user",
-            parts: [
-              {
-                functionResponse: {
-                  name: functionCall.name,
-                  response: queryExecution.error
-                    ? {
-                        error: queryExecution.error,
-                        suggestion: "Try a different query or approach",
-                      }
-                    : {
-                        data: queryExecution.result,
-                        rowCount: queryExecution.rowCount,
-                        executionTime: queryExecution.executionTime,
-                      },
-                },
+            return {
+              queryExecution,
+              functionResponse: {
+                name: call.name,
+                response: queryExecution.error
+                  ? {
+                      error: queryExecution.error,
+                      suggestion: "Try a different query or approach",
+                    }
+                  : {
+                      data: queryExecution.result,
+                      rowCount: queryExecution.rowCount,
+                      executionTime: queryExecution.executionTime,
+                    },
               },
-            ],
-          });
+            };
+          }
+          return null;
+        });
 
-          // Get next response
-          agentResponse = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: conversationMessages,
-            config: {
-              systemInstruction: systemPrompt,
-              tools: [{ functionDeclarations: [EXECUTE_SQL_FUNCTION] }],
-              temperature: 0.1,
-            },
-          });
-        } else {
-          // Unknown function
+        const results = await Promise.all(executionPromises);
+        const validResults = results.filter((r) => r !== null) as {
+          queryExecution: QueryExecution;
+          functionResponse: any;
+        }[];
+
+        if (validResults.length === 0) {
           break;
         }
+
+        // Add queries to global list
+        validResults.forEach((r) => queries.push(r.queryExecution));
+
+        // Add function responses to history
+        conversationMessages.push({
+          role: "user",
+          parts: validResults.map((r) => ({
+            functionResponse: r.functionResponse,
+          })),
+        });
+
+        // Get next response
+        agentResponse = await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: conversationMessages,
+          config: {
+            systemInstruction: systemPrompt,
+            tools: [{ functionDeclarations: [EXECUTE_SQL_FUNCTION] }],
+            temperature: 0.1,
+          },
+        });
       }
 
       if (!finalText && queries.length > 0) {
@@ -535,6 +521,7 @@ ${JSON.stringify(schema, null, 2)}
 - If query fails, explain what went wrong and suggest alternatives
 
 **CHART DATA (IMPORTANT):**
+If the data can be visualized, you SHOULD include a chartdata block at the end of your response
 After your markdown answer, you can include chart data for visualization:
 
 \`\`\`chartdata
@@ -747,15 +734,33 @@ Generate a comprehensive, professional answer with:
 **CHART DATA FORMAT:**
 If the data can be visualized, include at the end:
 
+**CHART DATA (IMPORTANT):**
+If the data can be visualized, you SHOULD include a chartdata block at the end of your response.
+After your markdown answer, you can include chart data for visualization:
+
 \`\`\`chartdata
 {
   "type": "bar|pie|line|none",
-  "data": [{"name": "Category", "value": 123}, ...],
+  "data": [{"name": "...", "value": ...}],
   "xAxisKey": "name",
   "yAxisKey": "value",
-  "description": "What this chart shows"
+  "description": "Chart description"
 }
 \`\`\`
+
+**Chart Type Guidelines:**
+- **bar**: Comparing categories (2-20 items). Example: Sales by region, orders by status
+- **pie**: Showing proportions (3-8 slices). Example: Market share, status distribution
+- **line**: Trends over time (5+ points). Example: Monthly sales, user growth
+- **none**: Single values, non-numeric data, or when charts don't make sense
+
+**Chart Data Rules:**
+1. Extract numeric data suitable for visualization
+2. Use clear, human-readable names (not raw column names)
+3. Limit to 20 data points maximum
+4. Calculate percentages for pie charts if needed
+5. Only include chartdata block if data is suitable for visualization
+
 
 **Guidelines:**
 - Use clear, professional markdown
@@ -809,12 +814,6 @@ export async function cleanAndEnrichSchema(
   success: boolean;
   cleanedSchema?: any[];
   error?: string;
-  summary?: {
-    totalTables: number;
-    relevantTables: number;
-    removedTables: number;
-    categories: string[];
-  };
 }> {
   try {
     if (!rawSchema || rawSchema.length === 0) {
@@ -836,9 +835,7 @@ export async function cleanAndEnrichSchema(
       `Processing ${rawSchema.length} tables in ${batches.length} batch(es)...`
     );
 
-    const allCleanedSchemas = [];
-    const allRemovedTables = [];
-    let totalRelevant = 0;
+    const allCleanedSchemas: any[] = [];
 
     for (let batchIdx = 0; batchIdx < batches.length; batchIdx++) {
       const batch = batches[batchIdx];
@@ -862,15 +859,14 @@ ${JSON.stringify(batch, null, 2)}
 4. **Be conservative with removal** - only remove obviously irrelevant tables (<10% removal rate)
 
 YOUR TASKS:
-1. **Remove irrelevant tables** such as:
+1. **Filter out irrelevant tables** such as:
    - System/internal tables (migrations, sessions, logs, audit trails)
    - Temporary tables (temp_, tmp_, #)
    - Cache tables
    - Framework-specific tables (e.g., Django migrations, Laravel jobs, AspNet internal tables)
    - Any tables that don't contain meaningful business data
-   - **IMPORTANT**: Delete ratio should be below 10% to preserve context
 
-2. **Keep relevant tables** that contain:
+2. **Return only relevant tables** that contain:
    - Business entities (users, customers, products, orders, etc.)
    - Transaction data (sales, payments, shipments)
    - Master data (categories, regions, statuses)
@@ -881,7 +877,7 @@ YOUR TASKS:
    - **tableName**: EXACT name from raw schema (DO NOT CHANGE)
    - **tableDescription**: Clear, business-friendly description (2-3 sentences max)
    - **category**: Business category (Sales, Users, Products, Finance, Analytics, Operations, etc.)
-   - **isRelevant**: true if useful for queries
+   - **isRelevant**: true (only return relevant tables)
    - Mark primary keys and foreign keys accurately
 
 4. **Enrich each column** with:
@@ -916,15 +912,9 @@ IMPORTANT EXAMPLES:
   "tableName": "OrderItems"  // Don't change casing
   "isRelevant": false  // Don't mark business tables as irrelevant
 
-GUIDELINES:
-- Be selective but not overly aggressive in removing tables
-- Prioritize business value and query usefulness
-- Descriptions should be concise but informative
-- Think about what questions analysts would ask
-- **PRESERVE ALL ORIGINAL NAMES EXACTLY AS THEY ARE**
-- Categorize tables logically for better organization
+IMPORTANT: Only return tables that are relevant for business queries. Do not include system/internal tables.
 
-Return a JSON response following the schema structure.
+Return a JSON array of cleaned and enriched tables.
     `.trim();
 
       const result = await ai.models.generateContent({
@@ -936,42 +926,27 @@ Return a JSON response following the schema structure.
         },
       });
 
-      const cleanedData = JSON.parse(result.text || "{}");
+      const cleanedTables = JSON.parse(result.text || "[]");
 
-      // Filter to only return relevant tables
-      const relevantTables = cleanedData.cleanedSchema.filter(
-        (table: any) => table.isRelevant
-      );
+      // Filter to only return relevant tables (in case AI still returns some with isRelevant=false)
+      const relevantTables = Array.isArray(cleanedTables)
+        ? cleanedTables.filter((table: any) => table.isRelevant)
+        : [];
 
       allCleanedSchemas.push(...relevantTables);
-      allRemovedTables.push(...cleanedData.removedTables);
-      totalRelevant += relevantTables.length;
 
       console.log(
-        `Batch ${batchIdx + 1}: ${
-          relevantTables.length
-        } relevant tables kept, ${cleanedData.removedTables.length} removed`
+        `Batch ${batchIdx + 1}: ${relevantTables.length} relevant tables`
       );
     }
 
-    // NEW: Extract unique categories
-    const categories = [
-      ...new Set(allCleanedSchemas.map((t: any) => t.category)),
-    ];
-
-    const summary = {
-      totalTables: rawSchema.length,
-      relevantTables: totalRelevant,
-      removedTables: allRemovedTables.length,
-      categories,
-    };
-
-    console.log("Schema cleaning complete:", summary);
+    console.log(
+      `Schema cleaning complete: ${allCleanedSchemas.length} relevant tables from ${rawSchema.length} total`
+    );
 
     return {
       success: true,
       cleanedSchema: allCleanedSchemas,
-      summary,
     };
   } catch (error) {
     console.error("Error cleaning schema:", error);

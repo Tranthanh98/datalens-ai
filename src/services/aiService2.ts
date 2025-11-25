@@ -521,7 +521,7 @@ ${JSON.stringify(schema, null, 2)}
 - If query fails, explain what went wrong and suggest alternatives
 
 **CHART DATA (IMPORTANT):**
-If the data can be visualized, you SHOULD include a chartdata block at the end of your response
+If the data can be visualized, you SHOULD include a chartdata block at the end of your response.
 After your markdown answer, you can include chart data for visualization:
 
 \`\`\`chartdata
@@ -533,19 +533,55 @@ After your markdown answer, you can include chart data for visualization:
   "description": "Chart description"
 }
 \`\`\`
+**Chart Type Selection - CRITICAL GUIDELINES:**
 
-**Chart Type Guidelines:**
-- **bar**: Comparing categories (2-20 items). Example: Sales by region, orders by status
-- **pie**: Showing proportions (3-8 slices). Example: Market share, status distribution
-- **line**: Trends over time (5+ points). Example: Monthly sales, user growth
-- **none**: Single values, non-numeric data, or when charts don't make sense
+🥧 **PIE CHART** - Use when showing PARTS OF A WHOLE (proportions/percentages):
+- Keywords: "tỷ lệ", "phần trăm", "proportion", "share", "distribution", "breakdown", "composition"
+- Questions like: "tỷ lệ đơn hàng theo category", "phân bổ doanh thu", "market share"
+- Data represents: percentages, ratios, parts that sum to 100% or a total
+- Best for: 3-8 slices, showing how parts contribute to whole
+- Example: Order distribution by status (Completed: 60%, Pending: 25%, Cancelled: 15%)
+
+📊 **BAR CHART** - Use when COMPARING ABSOLUTE VALUES across categories:
+- Keywords: "so sánh", "compare", "highest", "lowest", "ranking", "top", "bottom"
+- Questions like: "top 10 products by revenue", "compare sales between regions"
+- Data represents: absolute numbers, counts, totals (not percentages)
+- Best for: 2-20 items, comparing magnitudes
+- Example: Revenue by product ($50K, $45K, $30K - actual amounts)
+
+📈 **LINE CHART** - Use when showing TRENDS OVER TIME:
+- Keywords: "xu hướng", "trend", "over time", "monthly", "yearly", "growth", "change"
+- Questions like: "monthly sales trend", "user growth over time"
+- Data has: time-based x-axis (dates, months, years)
+- Best for: 5+ data points with temporal progression
+- Example: Monthly revenue (Jan: $10K → Feb: $12K → Mar: $15K)
+
+🚫 **NONE** - Use when:
+- Single value result (e.g., total count, average)
+- Non-numeric/text data
+- Too few data points (<2)
+- Data doesn't fit visualization
+
+**Decision Examples:**
+| Question | Chart Type | Reason |
+|----------|------------|--------|
+| "Tỷ lệ đơn hàng theo trạng thái" | PIE | Shows proportion/distribution |
+| "Top 5 sản phẩm bán chạy" | BAR | Compares absolute sales numbers |
+| "So sánh doanh thu các chi nhánh" | BAR | Compares absolute values |
+| "Phân bổ khách hàng theo vùng miền" | PIE | Shows distribution/proportion |
+| "Doanh thu theo tháng trong năm" | LINE | Shows trend over time |
+| "Tổng số đơn hàng" | NONE | Single value |
 
 **Chart Data Rules:**
-1. Extract numeric data suitable for visualization
-2. Use clear, human-readable names (not raw column names)
-3. Limit to 20 data points maximum
-4. Calculate percentages for pie charts if needed
-5. Only include chartdata block if data is suitable for visualization
+1. ALWAYS analyze the question intent before choosing chart type
+2. If question mentions "tỷ lệ/proportion/share/distribution" → PIE
+3. If question mentions "so sánh/compare/top/ranking" with absolute values → BAR
+4. If question involves time series → LINE
+5. Calculate percentages for pie charts (values should ideally sum to ~100)
+6. Use clear, human-readable names (not raw column names)
+7. Limit to 20 data points maximum
+8. Only include chartdata block if data is suitable for visualization
+
 
 **IMPORTANT:**
 - Always explain your reasoning
@@ -731,9 +767,6 @@ Generate a comprehensive, professional answer with:
 4. **Analysis & Insights** - Interpretation of the data
 5. **Chart Data Block** - If data is suitable for visualization
 
-**CHART DATA FORMAT:**
-If the data can be visualized, include at the end:
-
 **CHART DATA (IMPORTANT):**
 If the data can be visualized, you SHOULD include a chartdata block at the end of your response.
 After your markdown answer, you can include chart data for visualization:
@@ -747,19 +780,54 @@ After your markdown answer, you can include chart data for visualization:
   "description": "Chart description"
 }
 \`\`\`
+**Chart Type Selection - CRITICAL GUIDELINES:**
 
-**Chart Type Guidelines:**
-- **bar**: Comparing categories (2-20 items). Example: Sales by region, orders by status
-- **pie**: Showing proportions (3-8 slices). Example: Market share, status distribution
-- **line**: Trends over time (5+ points). Example: Monthly sales, user growth
-- **none**: Single values, non-numeric data, or when charts don't make sense
+🥧 **PIE CHART** - Use when showing PARTS OF A WHOLE (proportions/percentages):
+- Keywords: "tỷ lệ", "phần trăm", "proportion", "share", "distribution", "breakdown", "composition"
+- Questions like: "tỷ lệ đơn hàng theo category", "phân bổ doanh thu", "market share"
+- Data represents: percentages, ratios, parts that sum to 100% or a total
+- Best for: 3-8 slices, showing how parts contribute to whole
+- Example: Order distribution by status (Completed: 60%, Pending: 25%, Cancelled: 15%)
+
+📊 **BAR CHART** - Use when COMPARING ABSOLUTE VALUES across categories:
+- Keywords: "so sánh", "compare", "highest", "lowest", "ranking", "top", "bottom"
+- Questions like: "top 10 products by revenue", "compare sales between regions"
+- Data represents: absolute numbers, counts, totals (not percentages)
+- Best for: 2-20 items, comparing magnitudes
+- Example: Revenue by product ($50K, $45K, $30K - actual amounts)
+
+📈 **LINE CHART** - Use when showing TRENDS OVER TIME:
+- Keywords: "xu hướng", "trend", "over time", "monthly", "yearly", "growth", "change"
+- Questions like: "monthly sales trend", "user growth over time"
+- Data has: time-based x-axis (dates, months, years)
+- Best for: 5+ data points with temporal progression
+- Example: Monthly revenue (Jan: $10K → Feb: $12K → Mar: $15K)
+
+🚫 **NONE** - Use when:
+- Single value result (e.g., total count, average)
+- Non-numeric/text data
+- Too few data points (<2)
+- Data doesn't fit visualization
+
+**Decision Examples:**
+| Question | Chart Type | Reason |
+|----------|------------|--------|
+| "Tỷ lệ đơn hàng theo trạng thái" | PIE | Shows proportion/distribution |
+| "Top 5 sản phẩm bán chạy" | BAR | Compares absolute sales numbers |
+| "So sánh doanh thu các chi nhánh" | BAR | Compares absolute values |
+| "Phân bổ khách hàng theo vùng miền" | PIE | Shows distribution/proportion |
+| "Doanh thu theo tháng trong năm" | LINE | Shows trend over time |
+| "Tổng số đơn hàng" | NONE | Single value |
 
 **Chart Data Rules:**
-1. Extract numeric data suitable for visualization
-2. Use clear, human-readable names (not raw column names)
-3. Limit to 20 data points maximum
-4. Calculate percentages for pie charts if needed
-5. Only include chartdata block if data is suitable for visualization
+1. ALWAYS analyze the question intent before choosing chart type
+2. If question mentions "tỷ lệ/proportion/share/distribution" → PIE
+3. If question mentions "so sánh/compare/top/ranking" with absolute values → BAR
+4. If question involves time series → LINE
+5. Calculate percentages for pie charts (values should ideally sum to ~100)
+6. Use clear, human-readable names (not raw column names)
+7. Limit to 20 data points maximum
+8. Only include chartdata block if data is suitable for visualization
 
 
 **Guidelines:**

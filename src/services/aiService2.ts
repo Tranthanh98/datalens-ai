@@ -31,7 +31,7 @@ const ai = new GoogleGenAI({
 const EXECUTE_SQL_FUNCTION: FunctionDeclaration = {
   name: "execute_sql",
   description:
-    "Execute a SQL SELECT query to retrieve data from the database. Use this when you need actual data to answer the user's question.",
+    "Execute a SQL SELECT query. Use this for: 1. Looking up entity IDs (users, products) by name. 2. Retrieving data for analysis.",
   parameters: {
     type: Type.OBJECT,
     properties: {
@@ -199,7 +199,7 @@ export class AIService {
       }
 
       // Get relevant schema
-      const schemaResult = await searchSimilarTables(databaseId, question, 15);
+      const schemaResult = await searchSimilarTables(databaseId, question, 20);
 
       if (
         !schemaResult.success ||
@@ -253,10 +253,15 @@ export class AIService {
 
         // Check if agent wants to call function
         const functionCalls = agentResponse.functionCalls;
+        const agentText = agentResponse.text || "";
+
+        if (agentText) {
+          console.log(`🤔 Agent thought: ${agentText}`);
+        }
 
         if (!functionCalls || functionCalls.length === 0) {
           // No function call - agent has final answer
-          finalText = agentResponse.text || "";
+          finalText = agentText;
           break;
         }
 
@@ -264,10 +269,16 @@ export class AIService {
           `🔄 Iteration ${iteration}: Processing ${functionCalls.length} function calls`
         );
 
-        // Add model's function calls to history
+        // Add model's response to history (including text thought and function calls)
+        const parts: any[] = [];
+        if (agentText) {
+          parts.push({ text: agentText });
+        }
+        functionCalls.forEach((fc) => parts.push({ functionCall: fc }));
+
         conversationMessages.push({
           role: "model",
-          parts: functionCalls.map((fc) => ({ functionCall: fc })),
+          parts: parts,
         });
 
         // Execute all function calls in parallel
@@ -493,9 +504,21 @@ export class AIService {
 ${JSON.stringify(schema, null, 2)}
 
 **YOUR CAPABILITIES:**
-1. **Data Queries**: When users ask about data, use the execute_sql function to query the database
-2. **General Chat**: When users ask general questions, greet, or clarify, respond directly without querying
-3. **Context Aware**: Use conversation history to provide relevant answers
+1. **Data Queries**: Use \`execute_sql\` to run SELECT queries.
+2. **Entity Lookup**: If a user references a specific entity (e.g., "Customer ABC", "Product X") by name, you MUST first query to find its ID/details before doing the main analysis.
+3. **General Chat**: Respond directly to greetings/general questions.
+
+**STRATEGY FOR COMPLEX QUESTIONS (CRITICAL):**
+Don't try to do everything in one query if you lack IDs. Break it down:
+1. **Step 1: Lookup** - Find the specific IDs for names mentioned in the question.
+   - Example: User asks "Orders for customer John Doe"
+   - Action: \`SELECT id, name FROM customers WHERE name LIKE '%John Doe%'\`
+2. **Step 2: Analyze** - Use the IDs found in Step 1 for the main query.
+   - Action: \`SELECT count(*) FROM orders WHERE customer_id = 123\`
+
+**THOUGHT PROCESS:**
+Before calling a function, briefly explain your reasoning.
+Example: "I need to find the customer ID for 'ABC' first, then I will count their orders."
 
 **SQL QUERY GUIDELINES:**
 - ALWAYS use SELECT statements only (no INSERT, UPDATE, DELETE, DROP)

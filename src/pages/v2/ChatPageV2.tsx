@@ -3,6 +3,7 @@ import { Send, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import ChatMessageV2 from "../../components/v2/ChatMessageV2";
 import ConversationSidebarV2 from "../../components/v2/ConversationSidebarV2";
+import DatabaseSelector from "../../components/v2/DatabaseSelector";
 import {
   ConversationService,
   MessageService,
@@ -370,10 +371,11 @@ const ChatPageV2 = () => {
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col bg-white">
           {/* Chat Header */}
-          <div className="h-14 border-b border-gray-200 flex items-center px-4">
+          <div className="h-14 border-b border-gray-200 flex items-center justify-between px-4">
             <h1 className="text-lg font-medium text-gray-800 truncate">
               {conversationTitle}
             </h1>
+            <DatabaseSelector />
           </div>
 
           {/* Messages */}

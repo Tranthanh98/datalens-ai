@@ -1,12 +1,14 @@
 import cors from "cors";
 import dotenv from "dotenv";
 import express, { Express } from "express";
+import path from "path";
 import { initializeFromEnv } from "./db/client";
 import { runMigrationsFromEnv } from "./db/migrations";
 import { SchemaService } from "./services/schemaService";
 import { DatabaseConnectionInfo } from "./utils/schemaQueries";
 
 import { databaseInfoRepository } from "./repositories/databaseInfoRepository";
+import { pinnedChartRepository } from "./repositories/pinnedChartRepository";
 import { schemaInfoRepository } from "./repositories/schemaInfoRepository";
 import { embeddingService } from "./services/embeddingService";
 import { QueryExecutionService } from "./services/queryExecutionService";
@@ -38,6 +40,10 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from the frontend build (dist folder)
+const distPath = path.join(__dirname, "../../dist");
+app.use(express.static(distPath));
 /**
  * Test database connection endpoint
  */
@@ -564,6 +570,173 @@ app.post("/api/database/:id/schema/search-similar-tables", async (req, res) => {
   }
 });
 
+// ============================================
+// Pinned Charts API Endpoints
+// ============================================
+
+/**
+ * Get all pinned charts for a database
+ */
+app.get("/api/pinned-charts/database/:databaseId", async (req, res) => {
+  try {
+    const databaseId = parseInt(req.params.databaseId, 10);
+    const charts = await pinnedChartRepository.getByDatabaseId(databaseId);
+
+    res.json({
+      success: true,
+      data: charts,
+    });
+  } catch (error) {
+    console.error("Failed to get pinned charts:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to retrieve pinned charts",
+    });
+  }
+});
+
+/**
+ * Get pinned chart by ID
+ */
+app.get("/api/pinned-charts/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const chart = await pinnedChartRepository.getById(id);
+
+    if (!chart) {
+      return res.status(404).json({
+        success: false,
+        error: "Pinned chart not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: chart,
+    });
+  } catch (error) {
+    console.error("Failed to get pinned chart:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to retrieve pinned chart",
+    });
+  }
+});
+
+/**
+ * Create new pinned chart
+ */
+app.post("/api/pinned-charts", async (req, res) => {
+  try {
+    const {
+      databaseId,
+      title,
+      sqlQuery,
+      chartType,
+      xAxisKey,
+      yAxisKey,
+      description,
+    } = req.body;
+
+    // Validate required fields
+    if (!databaseId || !title || !sqlQuery || !chartType) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "Missing required fields: databaseId, title, sqlQuery, chartType",
+      });
+    }
+
+    // Validate chart type
+    const validChartTypes = ["bar", "pie", "line"];
+    if (!validChartTypes.includes(chartType)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid chart type. Must be one of: ${validChartTypes.join(
+          ", "
+        )}`,
+      });
+    }
+
+    const chart = await pinnedChartRepository.create({
+      databaseId,
+      title,
+      sqlQuery,
+      chartType,
+      xAxisKey: xAxisKey || "name",
+      yAxisKey: yAxisKey || "value",
+      description,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: chart,
+    });
+  } catch (error) {
+    console.error("Failed to create pinned chart:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to create pinned chart",
+    });
+  }
+});
+
+/**
+ * Update pinned chart
+ */
+app.put("/api/pinned-charts/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const chart = await pinnedChartRepository.update(id, req.body);
+
+    if (!chart) {
+      return res.status(404).json({
+        success: false,
+        error: "Pinned chart not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: chart,
+    });
+  } catch (error) {
+    console.error("Failed to update pinned chart:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to update pinned chart",
+    });
+  }
+});
+
+/**
+ * Delete pinned chart
+ */
+app.delete("/api/pinned-charts/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const deleted = await pinnedChartRepository.delete(id);
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        error: "Pinned chart not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Pinned chart deleted successfully",
+    });
+  } catch (error) {
+    console.error("Failed to delete pinned chart:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to delete pinned chart",
+    });
+  }
+});
+
 /**
  * Initialize database and run migrations before starting server
  */
@@ -584,11 +757,23 @@ async function startServer() {
       console.log("⚠️  Auto-migrations disabled. Run manually if needed.");
     }
 
+    // SPA fallback - serve index.html for all non-API routes
+    // This must be added AFTER all API routes
+    app.get("*", (req, res) => {
+      // Only serve index.html for non-API routes
+      if (!req.path.startsWith("/api")) {
+        res.sendFile(path.join(distPath, "index.html"));
+      } else {
+        res.status(404).json({ error: "API endpoint not found" });
+      }
+    });
+
     // Start Express server
     app.listen(PORT, () => {
       console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
       console.log(`🚀 DataLens AI Server running on http://localhost:${PORT}`);
       console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+      console.log(`🌐 Frontend served from: ${distPath}`);
       console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     });
   } catch (error) {

@@ -1,4 +1,4 @@
-import { BarChart3, Check, Copy } from "lucide-react";
+import { BarChart3, Check, Copy, Pin, X } from "lucide-react";
 import { memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
@@ -17,6 +17,8 @@ import {
   YAxis,
 } from "recharts";
 import remarkGfm from "remark-gfm";
+import { PinnedChartApiService } from "../../services/pinnedChartApiService";
+import { useDatabaseStore } from "../../store";
 
 // Chart data types
 interface ChartData {
@@ -43,6 +45,7 @@ interface ChatMessageV2Props {
   sqlQuery?: string;
   chartData?: ChartData | null;
   queryResult?: QueryResultData | null;
+  databaseId?: number;
 }
 
 // Colors for pie chart
@@ -100,124 +103,272 @@ const SQLCodeBlock: React.FC<{ code: string }> = memo(({ code }) => {
 SQLCodeBlock.displayName = "SQLCodeBlock";
 
 /**
- * Chart component that renders different chart types
+ * Pin Chart Modal component
  */
-const ChartDisplay: React.FC<{ chartData: ChartData }> = memo(
-  ({ chartData }) => {
-    const {
-      type,
-      data,
-      xAxisKey = "name",
-      yAxisKey = "value",
-      description,
-    } = chartData;
+const PinChartModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (title: string) => void;
+  defaultTitle?: string;
+  isLoading?: boolean;
+}> = memo(
+  ({ isOpen, onClose, onSave, defaultTitle = "", isLoading = false }) => {
+    const [title, setTitle] = useState(defaultTitle);
 
-    if (type === "none" || !data || data.length === 0) {
-      return null;
-    }
+    if (!isOpen) return null;
 
-    const renderChart = () => {
-      switch (type) {
-        case "bar":
-          return (
-            <BarChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey={xAxisKey} tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: "8px",
-                  boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                }}
-              />
-              <Legend />
-              <Bar dataKey={yAxisKey} fill="#3B82F6" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          );
-
-        case "line":
-          return (
-            <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
-              <XAxis dataKey={xAxisKey} tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: "8px",
-                  boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                }}
-              />
-              <Legend />
-              <Line
-                type="monotone"
-                dataKey={yAxisKey}
-                stroke="#3B82F6"
-                strokeWidth={2}
-                dot={{ fill: "#3B82F6", strokeWidth: 2 }}
-              />
-            </LineChart>
-          );
-
-        case "pie":
-          return (
-            <PieChart>
-              <Pie
-                data={data}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={({ name, percent }) =>
-                  `${name}: ${(percent * 100).toFixed(0)}%`
-                }
-                outerRadius={100}
-                fill="#8884d8"
-                dataKey={yAxisKey}
-              >
-                {data.map((_entry, index) => (
-                  <Cell
-                    key={`cell-${index}`}
-                    fill={COLORS[index % COLORS.length]}
-                  />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "white",
-                  border: "1px solid #E5E7EB",
-                  borderRadius: "8px",
-                  boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
-                }}
-              />
-              <Legend />
-            </PieChart>
-          );
-
-        default:
-          return null;
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      if (title.trim()) {
+        onSave(title.trim());
       }
     };
 
     return (
-      <div className="my-4 p-4 bg-white border border-gray-200 rounded-lg">
-        {description && (
-          <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-            <BarChart3 className="w-4 h-4 text-blue-600" />
-            {description}
-          </h4>
-        )}
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            {renderChart()}
-          </ResponsiveContainer>
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Pin to Dashboard
+            </h3>
+            <button
+              onClick={onClose}
+              className="p-1 rounded hover:bg-gray-100 transition-colors"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
+          <form onSubmit={handleSubmit} className="p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Chart Title
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Enter chart title..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!title.trim() || isLoading}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Pin className="w-4 h-4" />
+                    Pin Chart
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     );
   }
 );
+
+PinChartModal.displayName = "PinChartModal";
+
+/**
+ * Chart component that renders different chart types
+ */
+const ChartDisplay: React.FC<{
+  chartData: ChartData;
+  sqlQuery?: string;
+}> = memo(({ chartData, sqlQuery }) => {
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [isPinning, setIsPinning] = useState(false);
+  const [isPinned, setIsPinned] = useState(false);
+  const { selectedDatabase } = useDatabaseStore();
+
+  const {
+    type,
+    data,
+    xAxisKey = "name",
+    yAxisKey = "value",
+    description,
+  } = chartData;
+
+  /**
+   * Handle pin chart to dashboard
+   */
+  const handlePinChart = async (title: string) => {
+    if (!selectedDatabase?.id || !sqlQuery) return;
+
+    setIsPinning(true);
+    try {
+      await PinnedChartApiService.create({
+        databaseId: parseInt(selectedDatabase.id, 10),
+        title,
+        sqlQuery,
+        chartType: type as "bar" | "pie" | "line",
+        xAxisKey,
+        yAxisKey,
+        description,
+      });
+      setIsPinned(true);
+      setShowPinModal(false);
+    } catch (error) {
+      console.error("Failed to pin chart:", error);
+      alert("Failed to pin chart. Please try again.");
+    } finally {
+      setIsPinning(false);
+    }
+  };
+
+  if (type === "none" || !data || data.length === 0) {
+    return null;
+  }
+
+  const renderChart = () => {
+    switch (type) {
+      case "bar":
+        return (
+          <BarChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+            <XAxis dataKey={xAxisKey} tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12 }} />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "white",
+                border: "1px solid #E5E7EB",
+                borderRadius: "8px",
+                boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+              }}
+            />
+            <Legend />
+            <Bar dataKey={yAxisKey} fill="#3B82F6" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        );
+
+      case "line":
+        return (
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+            <XAxis dataKey={xAxisKey} tick={{ fontSize: 12 }} />
+            <YAxis tick={{ fontSize: 12 }} />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "white",
+                border: "1px solid #E5E7EB",
+                borderRadius: "8px",
+                boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+              }}
+            />
+            <Legend />
+            <Line
+              type="monotone"
+              dataKey={yAxisKey}
+              stroke="#3B82F6"
+              strokeWidth={2}
+              dot={{ fill: "#3B82F6", strokeWidth: 2 }}
+            />
+          </LineChart>
+        );
+
+      case "pie":
+        return (
+          <PieChart>
+            <Pie
+              data={data}
+              cx="50%"
+              cy="50%"
+              labelLine={false}
+              label={({ name, percent }) =>
+                `${name}: ${(percent * 100).toFixed(0)}%`
+              }
+              outerRadius={100}
+              fill="#8884d8"
+              dataKey={yAxisKey}
+            >
+              {data.map((_entry, index) => (
+                <Cell
+                  key={`cell-${index}`}
+                  fill={COLORS[index % COLORS.length]}
+                />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "white",
+                border: "1px solid #E5E7EB",
+                borderRadius: "8px",
+                boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+              }}
+            />
+            <Legend />
+          </PieChart>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  // Check if pin button should be shown
+  const canPin = sqlQuery && selectedDatabase?.id && !isPinned;
+
+  return (
+    <div className="my-4 p-4 bg-white border border-gray-200 rounded-lg relative group">
+      {/* Pin Button */}
+      {canPin && (
+        <button
+          onClick={() => setShowPinModal(true)}
+          className="absolute top-2 right-2 p-2 rounded-lg bg-gray-100 hover:bg-blue-100 text-gray-500 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-all"
+          title="Pin to Dashboard"
+        >
+          <Pin className="w-4 h-4" />
+        </button>
+      )}
+
+      {/* Pinned indicator */}
+      {isPinned && (
+        <div className="absolute top-2 right-2 flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-lg text-xs">
+          <Check className="w-3 h-3" />
+          Pinned
+        </div>
+      )}
+
+      {description && (
+        <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-blue-600" />
+          {description}
+        </h4>
+      )}
+      <div className="h-72">
+        <ResponsiveContainer width="100%" height="100%">
+          {renderChart()}
+        </ResponsiveContainer>
+      </div>
+
+      {/* Pin Modal */}
+      <PinChartModal
+        isOpen={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onSave={handlePinChart}
+        defaultTitle={description || "Chart"}
+        isLoading={isPinning}
+      />
+    </div>
+  );
+});
 
 ChartDisplay.displayName = "ChartDisplay";
 
@@ -422,7 +573,7 @@ const ChatMessageV2: React.FC<ChatMessageV2Props> = memo(
 
                   {/* Chart Display */}
                   {chartData && chartData.type !== "none" && (
-                    <ChartDisplay chartData={chartData} />
+                    <ChartDisplay chartData={chartData} sqlQuery={sqlQuery} />
                   )}
 
                   {/* Data Table */}

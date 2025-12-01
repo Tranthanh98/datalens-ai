@@ -3,11 +3,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Database,
+  LayoutDashboard,
   MessageSquare,
   Plus,
   Settings,
   Trash2,
 } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ConversationService } from "../../db/services";
 import { useChatStore, useDatabaseStore } from "../../store";
 
@@ -26,6 +28,11 @@ const ConversationSidebarV2: React.FC<ConversationSidebarV2Props> = ({
 }) => {
   const { selectedDatabase } = useDatabaseStore();
   const { selectedConversationId, setSelectedConversationId } = useChatStore();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Check if current page is dashboard
+  const isDashboardPage = location.pathname === "/v2/dashboard";
 
   // Fetch conversations using useLiveQuery
   const conversations =
@@ -49,6 +56,10 @@ const ConversationSidebarV2: React.FC<ConversationSidebarV2Props> = ({
    */
   const handleConversationSelect = (conversationId: string) => {
     setSelectedConversationId(conversationId);
+    // Navigate to chat page if not already there
+    if (isDashboardPage) {
+      navigate("/v2/chat");
+    }
   };
 
   /**
@@ -63,6 +74,10 @@ const ConversationSidebarV2: React.FC<ConversationSidebarV2Props> = ({
         `New Chat`
       );
       setSelectedConversationId(convId.toString());
+      // Navigate to chat page if not already there
+      if (isDashboardPage) {
+        navigate("/v2/chat");
+      }
     } catch (error) {
       console.error("Failed to create conversation:", error);
     }
@@ -151,6 +166,21 @@ const ConversationSidebarV2: React.FC<ConversationSidebarV2Props> = ({
           </button>
         </div>
 
+        {/* Dashboard link */}
+        <div className="px-3">
+          <Link
+            to="/v2/dashboard"
+            className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors ${
+              isDashboardPage
+                ? "bg-gray-800 text-blue-400"
+                : "hover:bg-gray-800 text-gray-400"
+            }`}
+            title="Dashboard"
+          >
+            <LayoutDashboard className="w-5 h-5" />
+          </Link>
+        </div>
+
         {/* Spacer */}
         <div className="flex-1" />
 
@@ -186,6 +216,21 @@ const ConversationSidebarV2: React.FC<ConversationSidebarV2Props> = ({
         >
           <ChevronLeft className="w-5 h-5 text-gray-400" />
         </button>
+      </div>
+
+      {/* Dashboard link */}
+      <div className="px-3 py-2 border-b border-gray-800">
+        <Link
+          to="/v2/dashboard"
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+            isDashboardPage
+              ? "bg-gray-800 text-blue-400"
+              : "text-gray-300 hover:bg-gray-800/50"
+          }`}
+        >
+          <LayoutDashboard className="w-4 h-4" />
+          <span className="text-sm font-medium">Dashboard</span>
+        </Link>
       </div>
 
       {/* Conversations list */}

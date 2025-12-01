@@ -55,18 +55,23 @@ SELECT
     ) AS [columns]
 FROM INFORMATION_SCHEMA.TABLES t
 WHERE 1 = 1
- --   AND t.TABLE_TYPE = 'BASE TABLE'
- --   AND (
- --       t.TABLE_NAME NOT LIKE '%Log%'
- --       OR t.TABLE_NAME LIKE 'Login%'
- --   )
- --   AND t.TABLE_NAME NOT LIKE '%audit%'
- --   AND t.TABLE_NAME NOT LIKE '%vw%'
- --   AND t.TABLE_NAME NOT LIKE '%migration%'
- --   AND t.TABLE_NAME NOT LIKE '%WebMenu%'
- --   AND t.TABLE_NAME NOT LIKE '%Report%'
- --   AND t.TABLE_NAME NOT LIKE '%System%'
- --   AND t.TABLE_NAME NOT LIKE 'Template%'
-	--AND t.TABLE_NAME NOT LIKE '%sys%'
-	--AND t.TABLE_NAME not like '%AWBuildVersion%'
+   AND t.TABLE_TYPE = 'BASE TABLE'
+   AND t.TABLE_SCHEMA = 'dbo'
+   AND ( t.TABLE_NAME like '%Order%'
+   OR t.TABLE_NAME like '%Contract%'
+   OR t.TABLE_NAME like '%Client%'
+   OR t.TABLE_NAME like '%Login%'
+   OR t.TABLE_NAME like '%Service%'
+   OR t.TABLE_NAME like '%Quot%'
+   OR t.TABLE_NAME like '%File%'
+   OR t.TABLE_NAME like '%Fee%'
+   OR t.TABLE_NAME like '%Profile%')
+   AND t.TABLE_NAME not like '%Menu%'
+   AND t.TABLE_NAME not like '%iMatter%'
+   AND t.TABLE_NAME not like '%Tag%'
+   AND t.TABLE_NAME not like '%Audit%'
+  AND (
+	   t.TABLE_NAME NOT LIKE '%Log%'
+	   OR t.TABLE_NAME LIKE 'Login%'
+   )
 ORDER BY t.TABLE_SCHEMA, t.TABLE_NAME;
